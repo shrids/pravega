@@ -16,7 +16,6 @@ import mesosphere.marathon.client.model.v2.Container;
 import mesosphere.marathon.client.model.v2.Docker;
 import mesosphere.marathon.client.utils.MarathonException;
 
-import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -26,9 +25,8 @@ import static io.pravega.test.system.framework.TestFrameworkException.Type.Inter
 @Slf4j
 public class HDFSService extends MarathonBasedService {
 
-
     private static final String HDFS_IMAGE = "dsrw/hdfs:2.7.3-1";
-    private static final int HDFS_PORT = 8020;
+    //    private static final int HDFS_PORT = 8020;
     private int instances = 1;
     private double cpu = 1.0;
     private double mem = 1024.0;
@@ -83,9 +81,6 @@ public class HDFSService extends MarathonBasedService {
         app.getContainer().setDocker(new Docker());
         app.getContainer().getDocker().setImage(HDFS_IMAGE);
         app.getContainer().getDocker().setNetwork(NETWORK_TYPE);
-        //set port
-        app.setPorts(Arrays.asList(HDFS_PORT));
-        app.setRequirePorts(true);
 
         return app;
     }
