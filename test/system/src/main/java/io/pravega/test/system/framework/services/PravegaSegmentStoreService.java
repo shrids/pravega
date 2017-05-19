@@ -64,6 +64,12 @@ public class PravegaSegmentStoreService extends MarathonBasedService {
     @Override
     public void start(final boolean wait) {
         deleteApp("/pravega/segmentstore");
+
+        //ensure hdfs is running for SSS
+        Service hdfsService = new HDFSService();
+        if (!hdfsService.isRunning()) {
+            hdfsService.start(true);
+        }
         log.info("Starting Pravega SegmentStore Service: {}", getID());
         try {
             marathonClient.createApp(createPravegaSegmentStoreApp());
