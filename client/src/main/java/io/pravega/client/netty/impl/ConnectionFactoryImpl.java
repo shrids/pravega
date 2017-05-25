@@ -12,8 +12,12 @@ package io.pravega.client.netty.impl;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ssl.SSLException;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.pravega.common.Exceptions;
 import io.pravega.shared.protocol.netty.AppendBatchSizeTracker;
 import io.pravega.shared.protocol.netty.CommandDecoder;
@@ -49,6 +53,9 @@ public final class ConnectionFactoryImpl implements ConnectionFactory {
     private EventLoopGroup group;
     private boolean nio = false;
     private final AtomicBoolean closed = new AtomicBoolean(false);
+    private final ScheduledExecutorService executor = Executors.newScheduledThreadPool(
+            Runtime.getRuntime().availableProcessors(),
+            new ThreadFactoryBuilder().setNameFormat("clientInternal-%d").build());
 
     /**
      * Actual implementation of ConnectionFactory interface.
@@ -122,6 +129,11 @@ public final class ConnectionFactoryImpl implements ConnectionFactory {
             result.completeExceptionally(e);
         }
         return result;
+    }
+
+    @Override
+    public ScheduledExecutorService getInternalExecutor() {
+        return executor;
     }
 
     @Override

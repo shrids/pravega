@@ -14,7 +14,6 @@ import io.pravega.client.segment.impl.Segment;
 import io.pravega.client.segment.impl.SegmentOutputStream;
 import io.pravega.client.segment.impl.SegmentOutputStreamFactory;
 import io.pravega.client.segment.impl.SegmentSealedException;
-import io.pravega.client.stream.AckFuture;
 import io.pravega.client.stream.EventStreamWriter;
 import io.pravega.client.stream.EventWriterConfig;
 import io.pravega.client.stream.PingFailedException;
@@ -24,6 +23,10 @@ import io.pravega.client.stream.Transaction;
 import io.pravega.client.stream.Transaction.Status;
 import io.pravega.client.stream.TxnFailedException;
 import io.pravega.common.Exceptions;
+import lombok.ToString;
+import lombok.extern.slf4j.Slf4j;
+
+import javax.annotation.concurrent.GuardedBy;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -32,9 +35,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.annotation.concurrent.GuardedBy;
-import lombok.ToString;
-import lombok.extern.slf4j.Slf4j;
 
 import static io.pravega.common.concurrent.FutureHelpers.getAndHandleExceptions;
 
@@ -75,21 +75,21 @@ public class EventStreamWriterImpl<Type> implements EventStreamWriter<Type> {
     }
 
     @Override
-    public AckFuture writeEvent(Type event) {
+    public CompletableFuture<Void> writeEvent(Type event) {
         return writeEventInternal(null, event);
     }
 
     @Override
-    public AckFuture writeEvent(String routingKey, Type event) {
+    public CompletableFuture<Void> writeEvent(String routingKey, Type event) {
         Preconditions.checkNotNull(routingKey);
         return writeEventInternal(routingKey, event);
     }
     
-    private AckFuture writeEventInternal(String routingKey, Type event) {
+    private CompletableFuture<Void> writeEventInternal(String routingKey, Type event) {
         Preconditions.checkNotNull(event);
         Exceptions.checkNotClosed(closed.get(), this);
         ByteBuffer data = serializer.serialize(event);
-        CompletableFuture<Boolean> result = new CompletableFuture<Boolean>();
+        CompletableFuture<Boolean> ackFuture = new CompletableFuture<Boolean>();
         synchronized (lock) {
             SegmentOutputStream segmentWriter = selector.getSegmentOutputStreamForKey(routingKey);
             while (segmentWriter == null) {
@@ -98,17 +98,32 @@ public class EventStreamWriterImpl<Type> implements EventStreamWriter<Type> {
                 segmentWriter = selector.getSegmentOutputStreamForKey(routingKey);
             }
             try {
-                segmentWriter.write(new PendingEvent(routingKey, data, result));
+                segmentWriter.write(new PendingEvent(routingKey, data, ackFuture));
             } catch (SegmentSealedException e) {
                 log.info("Segment was sealed: {}", segmentWriter);
                 handleLogSealed(Segment.fromScopedName(segmentWriter.getSegmentName()));
             }
         }
-        return new AckFutureImpl(result, () -> {
-            if (!closed.get()) {
-                flushInternal();
+
+        //shrids: The goal is to remove the need of flushInternal here. i.e. FlushInternal is used to handle segment
+        //sealed exception which should now be performed on the thread pool (Used the forkjoin pool!).
+        //This also implies that eventStreamWriterImpl does not need the internal executor.
+        CompletableFuture<Void> result = new CompletableFuture<>();
+
+        ackFuture.whenComplete((bool, exception) -> {
+            if (exception != null) {
+                result.completeExceptionally(exception);
+            } else {
+                if (bool) {
+                    result.complete(null);
+                } else {
+                    result.completeExceptionally(new IllegalStateException("Condition failed for non-conditional " +
+                            "write!?"));
+                }
             }
         });
+
+        return result;
     }
     
     @GuardedBy("lock")
