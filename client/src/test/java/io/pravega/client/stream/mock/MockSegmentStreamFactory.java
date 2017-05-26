@@ -17,18 +17,19 @@ import io.pravega.client.segment.impl.SegmentOutputStreamFactory;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 public class MockSegmentStreamFactory implements SegmentInputStreamFactory, SegmentOutputStreamFactory {
 
     private final Map<Segment, MockSegmentIoStreams> segments = new ConcurrentHashMap<>();
 
     @Override
-    public SegmentOutputStream createOutputStreamForTransaction(Segment segment, UUID txId) {
+    public SegmentOutputStream createOutputStreamForTransaction(Segment segment, UUID txId, Consumer<Segment> segmentSealedCallback) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public SegmentOutputStream createOutputStreamForSegment(Segment segment) {
+    public SegmentOutputStream createOutputStreamForSegment(Segment segment, Consumer<Segment> segmentSealedCallback) {
         MockSegmentIoStreams streams = new MockSegmentIoStreams(segment);
         segments.putIfAbsent(segment, streams);
         return segments.get(segment);
