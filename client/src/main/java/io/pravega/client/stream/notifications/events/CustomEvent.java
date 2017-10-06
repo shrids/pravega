@@ -7,8 +7,13 @@
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
-package io.pravega.client.stream.notifications;
+package io.pravega.client.stream.notifications.events;
 
+import io.pravega.client.stream.notifications.Event;
+
+/**
+ * Represents a customEvent.
+ */
 public class CustomEvent implements Event {
-
+    //no attributes.
 }
