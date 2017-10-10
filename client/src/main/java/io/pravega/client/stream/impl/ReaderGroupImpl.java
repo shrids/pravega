@@ -30,6 +30,10 @@ import io.pravega.client.stream.impl.ReaderGroupState.ClearCheckpoints;
 import io.pravega.client.stream.impl.ReaderGroupState.CreateCheckpoint;
 import io.pravega.client.stream.impl.ReaderGroupState.ReaderGroupStateInit;
 import io.pravega.client.stream.impl.ReaderGroupState.ReaderGroupStateUpdate;
+import io.pravega.client.stream.notifications.NotificationSystem;
+import io.pravega.client.stream.notifications.Observable;
+import io.pravega.client.stream.notifications.events.CustomEvent;
+import io.pravega.client.stream.notifications.events.ScaleEvent;
 import io.pravega.common.concurrent.FutureHelpers;
 import io.pravega.shared.NameUtils;
 import java.time.Duration;
@@ -64,6 +68,7 @@ public class ReaderGroupImpl implements ReaderGroup, ReaderGroupMetrics {
     private final ClientFactory clientFactory;
     private final Controller controller;
     private final ConnectionFactory connectionFactory;
+    private final NotificationSystem notificationSystem = new NotificationSystem();
 
     /**
      * Called by the StreamManager to provide the streams the group should start reading from.
@@ -204,4 +209,23 @@ public class ReaderGroupImpl implements ReaderGroup, ReaderGroupMetrics {
         return totalLength;
     }
 
+    @Override
+    public Observable<ScaleEvent> getScaleEventNotifier() {
+        return this.notificationSystem.getNotifierFactory().getScaleNotifier(this::getCurrentScaleEvent);
+    }
+
+    private ScaleEvent getCurrentScaleEvent() {
+        @Cleanup
+        StateSynchronizer<ReaderGroupState> synchronizer = createSynchronizer();
+        synchronizer.fetchUpdates();
+        ReaderGroupState state = synchronizer.getState();
+        return ScaleEvent.builder().numOfSegments(state.getNumberOfSegments())
+                         .numOfReaders(state.getOnlineReaders().size())
+                         .build();
+    }
+
+    @Override
+    public Observable<CustomEvent> getCustomEventNotifier() {
+        return this.notificationSystem.getNotifierFactory().getCustomNotifier();
+    }
 }
