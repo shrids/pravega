@@ -209,6 +209,8 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
         } catch (ReinitializationRequiredException e) {
             close();
             throw e;
+        } finally {
+            oldSegment.close();
         }
     }
     
