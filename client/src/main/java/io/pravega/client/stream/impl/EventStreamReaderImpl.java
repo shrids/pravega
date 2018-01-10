@@ -175,7 +175,11 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
             SegmentInputStream reader = readers.stream().filter(r -> r.getSegmentId().equals(segment)).findAny().orElse(null);
             if (reader != null) {
                 if (groupState.releaseSegment(segment, reader.getOffset(), getLag())) {
-                    readers.remove(reader);
+                    try {
+                        readers.remove(reader);
+                    } finally {
+                        reader.close();
+                    }
                 }
             }
         }
