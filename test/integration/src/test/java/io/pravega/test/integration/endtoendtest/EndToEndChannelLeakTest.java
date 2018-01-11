@@ -250,18 +250,5 @@ public class EndToEndChannelLeakTest {
         assertNotNull(event);
         //+1 connection (a new connection to the remaining stream segment)
         assertEquals(channelCount + 1, connectionFactory.getActiveChannelCount());
-        channelCount = channelCount + 1;
-
-        @Cleanup("shutdown")
-        final InlineExecutor backgroundExecutor = new InlineExecutor();
-        readerGroup.initiateCheckpoint("chk1", backgroundExecutor);
-        assertTrue(reader1.readNextEvent(10000).isCheckpoint());
-
-        event = reader1.readNextEvent(10000);
-        assertNotNull(event);
-
-        //+2 connections (+2 for reading and writing to _RGreader stream for checkpointing. -1 for release segment
-        // +1 for the new segment connection after re-balance operation between readers. )
-        assertEquals(channelCount + 2, connectionFactory.getActiveChannelCount());
     }
 }
