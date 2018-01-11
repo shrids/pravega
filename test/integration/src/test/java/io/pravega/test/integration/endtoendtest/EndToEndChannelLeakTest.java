@@ -13,7 +13,6 @@ import io.pravega.client.ClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.impl.ReaderGroupManagerImpl;
 import io.pravega.client.netty.impl.ConnectionFactoryImpl;
-import io.pravega.client.stream.Checkpoint;
 import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
 import io.pravega.client.stream.EventStreamWriter;
@@ -36,7 +35,7 @@ import io.pravega.test.common.InlineExecutor;
 import io.pravega.test.common.TestUtils;
 import io.pravega.test.common.TestingServerStarter;
 import io.pravega.test.integration.demo.ControllerWrapper;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.TimeUnit;
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.test.TestingServer;
@@ -47,7 +46,6 @@ import org.junit.Test;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -56,7 +54,6 @@ import static org.junit.Assert.*;
 @Slf4j
 public class EndToEndChannelLeakTest {
 
-    private static final long CLOCK_ADVANCE_INTERVAL = 60 * 1000000000L;
     private static final String SCOPE = "test";
     private static final String STREAM_NAME = "test";
     private static final String READER_GROUP = "reader";
@@ -169,8 +166,6 @@ public class EndToEndChannelLeakTest {
 
     @Test(timeout = 30000)
     public void testDetectChannelLeakMultiReader() throws Exception {
-        AtomicLong clock = new AtomicLong();
-
         StreamConfiguration config = StreamConfiguration.builder()
                                                         .scope(SCOPE)
                                                         .streamName(STREAM_NAME)
@@ -198,7 +193,7 @@ public class EndToEndChannelLeakTest {
         //create a reader.
         @Cleanup
         EventStreamReader<String> reader1 = clientFactory.createReader("readerId1", READER_GROUP, serializer,
-                ReaderConfig.builder().build(), clock::get, clock::get);
+                ReaderConfig.builder().build());
         //Write an event.
         writer.writeEvent("0", "zero").get();
 
@@ -208,7 +203,6 @@ public class EndToEndChannelLeakTest {
         int channelCount = 4;
 
         //Read an event.
-        clock.addAndGet(CLOCK_ADVANCE_INTERVAL);
         EventRead<String> event = reader1.readNextEvent(10000);
         assertNotNull(event);
         assertEquals("zero", event.getEvent());
@@ -240,12 +234,11 @@ public class EndToEndChannelLeakTest {
         //Add a new reader
         @Cleanup
         EventStreamReader<String> reader2 = clientFactory.createReader("readerId2", READER_GROUP, serializer,
-                ReaderConfig.builder().build(), clock::get, clock::get);
+                ReaderConfig.builder().build());
         //Creation of a reader will add 3 more connections details similar to the above comment.
         assertEquals(channelCount + 3, connectionFactory.getActiveChannelCount());
         channelCount = channelCount + 3;
 
-        clock.addAndGet(CLOCK_ADVANCE_INTERVAL);
         event = reader1.readNextEvent(10000);
         assertNotNull(event);
         //+1 connection (-1 since segment 0 of stream is sealed + 2 connections to two segments of stream (there are
@@ -253,24 +246,22 @@ public class EndToEndChannelLeakTest {
         assertEquals(channelCount + 1, connectionFactory.getActiveChannelCount());
         channelCount = channelCount + 1;
 
-        clock.addAndGet(CLOCK_ADVANCE_INTERVAL);
         event = reader2.readNextEvent(10000);
         assertNotNull(event);
         //+1 connection (a new connection to the remaining stream segment)
         assertEquals(channelCount + 1, connectionFactory.getActiveChannelCount());
         channelCount = channelCount + 1;
 
-        clock.addAndGet(CLOCK_ADVANCE_INTERVAL);
         @Cleanup("shutdown")
         final InlineExecutor backgroundExecutor = new InlineExecutor();
-        CompletableFuture<Checkpoint> chkPointResult = readerGroup.initiateCheckpoint("chk1", backgroundExecutor);
+        readerGroup.initiateCheckpoint("chk1", backgroundExecutor);
         assertTrue(reader1.readNextEvent(10000).isCheckpoint());
-        clock.addAndGet(CLOCK_ADVANCE_INTERVAL);
 
         event = reader1.readNextEvent(10000);
         assertNotNull(event);
+
         //+2 connections (+2 for reading and writing to _RGreader stream for checkpointing. -1 for release segment
-        // +1 for the new segment connection after reblance operation between readers. )
+        // +1 for the new segment connection after re-balance operation between readers. )
         assertEquals(channelCount + 2, connectionFactory.getActiveChannelCount());
     }
 }
