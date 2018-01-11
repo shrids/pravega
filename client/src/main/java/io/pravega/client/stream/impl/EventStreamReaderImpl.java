@@ -168,6 +168,7 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
         }
     }
 
+    @GuardedBy("readers")
     private void releaseSegmentsIfNeeded() throws ReinitializationRequiredException {
         Segment segment = groupState.findSegmentToReleaseIfRequired();
         if (segment != null) {
@@ -175,16 +176,14 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
             SegmentInputStream reader = readers.stream().filter(r -> r.getSegmentId().equals(segment)).findAny().orElse(null);
             if (reader != null) {
                 if (groupState.releaseSegment(segment, reader.getOffset(), getLag())) {
-                    try {
-                        readers.remove(reader);
-                    } finally {
-                        reader.close();
-                    }
+                    readers.remove(reader);
+                    reader.close();
                 }
             }
         }
     }
 
+    @GuardedBy("readers")
     private void acquireSegmentsIfNeeded() throws ReinitializationRequiredException {
         Map<Segment, Long> newSegments = groupState.acquireNewSegmentsIfNeeded(getLag());
         if (!newSegments.isEmpty()) {
@@ -209,12 +208,11 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
         try {
             log.info("{} encountered end of segment {} ", this, oldSegment.getSegmentId());
             readers.remove(oldSegment);
+            oldSegment.close();
             groupState.handleEndOfSegment(oldSegment.getSegmentId());
         } catch (ReinitializationRequiredException e) {
             close();
             throw e;
-        } finally {
-            oldSegment.close();
         }
     }
     
