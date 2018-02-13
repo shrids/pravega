@@ -14,7 +14,6 @@ import io.pravega.client.ClientFactory;
 import io.pravega.client.stream.impl.StreamCut;
 import io.pravega.client.stream.notifications.ReaderGroupNotificationListener;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -94,7 +93,7 @@ public interface ReaderGroup extends ReaderGroupNotificationListener {
      * @param streamCuts streamCut for every stream managed by the readerGroup.
      */
     @Beta
-    void resetReadersToStreamCut(Collection<StreamCut> streamCuts);
+    void resetReadersToStreamCut(Set<StreamCut> streamCuts);
     
     /**
      * Updates a reader group. All existing readers will have to call
