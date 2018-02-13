@@ -11,6 +11,7 @@ package io.pravega.client.stream.impl;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import com.google.common.base.Preconditions;
 import io.pravega.client.ClientFactory;
 import io.pravega.client.netty.impl.ConnectionFactory;
 import io.pravega.client.segment.impl.Segment;
@@ -40,8 +41,10 @@ import io.pravega.common.concurrent.Futures;
 import io.pravega.shared.NameUtils;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -161,16 +164,41 @@ public class ReaderGroupImpl implements ReaderGroup, ReaderGroupMetrics {
 
     @Override
     public void resetReadersToCheckpoint(Checkpoint checkpoint) {
+        resetReadersToStreamCut(new HashSet<>(checkpoint.asImpl().getPositions().values()));
+    }
+
+    @Override
+    public void resetReadersToStreamCut(final Set<StreamCut> streamCuts) {
         @Cleanup
         StateSynchronizer<ReaderGroupState> synchronizer = createSynchronizer();
+        synchronizer.fetchUpdates();
+
+        //ensure that streamCut for all the streams managed by the ReaderGroup are present.
+        Preconditions.checkArgument(validateStreamCuts(streamCuts, synchronizer.getState().getStreamNames()),
+                "StreamCuts for streams managed by the ReaderGroup need to be provided");
+
+        //reset the Readers to the StreamCut.
         synchronizer.updateState(state -> {
             ReaderGroupConfig config = state.getConfig();
             Map<Segment, Long> positions = new HashMap<>();
-            for (StreamCut cut : checkpoint.asImpl().getPositions().values()) {
+            for (StreamCut cut : streamCuts) {
                 positions.putAll(cut.getPositions());
             }
             return Collections.singletonList(new ReaderGroupStateInit(config, positions));
         });
+    }
+
+    private boolean validateStreamCuts(final Collection<StreamCut> streamCuts, final Set<String> readerGroupStreams) {
+        //check if all the StreamCuts are unique and has no duplicates.
+        boolean isUnique = streamCuts.stream().map(sc -> sc.getStream().getStreamName()).allMatch(new HashSet<>()::add);
+        if (isUnique) {
+            //validate that StreamCuts for all the streams managed by the readerGroup are present.
+            final Set<String> providedStreams = streamCuts.stream().map(sc ->
+                    sc.getStream().getStreamName()).collect(Collectors.toSet());
+            return providedStreams.equals(readerGroupStreams);
+        } else {
+            return false;
+        }
     }
 
     @Override
