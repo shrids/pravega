@@ -341,6 +341,11 @@ public class LocalController implements Controller {
     }
 
     @Override
+    public CompletableFuture<Set<Segment>> getSegments(StreamCut fromStreamCut, StreamCut toStreamCut) {
+        throw new NotImplementedException("getSegments");
+    }
+
+    @Override
     public CompletableFuture<PravegaNodeUri> getEndpointForSegment(String qualifiedSegmentName) {
         Segment segment = Segment.fromScopedName(qualifiedSegmentName);
             return controller.getURI(ModelHelper.createSegmentId(segment.getScope(), segment.getStreamName(),

@@ -16,9 +16,9 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Set;
 
-import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
+import lombok.NonNull;
 
 /**
  * A set of segment/offset pairs for a single stream that represent a consistent position in the
@@ -29,8 +29,10 @@ import lombok.Getter;
 @Data
 public class StreamCut implements Serializable {
 
+    @NonNull
     private final Stream stream;
-    @Getter(value = AccessLevel.PACKAGE)
+    @Getter
+    @NonNull
     private final Map<Segment, Long> positions;
 
     @VisibleForTesting

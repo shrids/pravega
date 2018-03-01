@@ -249,6 +249,15 @@ public interface Controller extends AutoCloseable {
      */
     CompletableFuture<Set<Segment>> getSuccessors(StreamCut from);
 
+    /**
+     * Returns all the segments from the fromStreamCut till toStreamCut.
+     *
+     * @param fromStreamCut From stream cut.
+     * @param toStreamCut To stream cut.
+     * @return list of segments.
+     */
+    CompletableFuture<Set<Segment>> getSegments(StreamCut fromStreamCut, StreamCut toStreamCut);
+
     // Controller Apis that are called by writers and readers
 
     /**
