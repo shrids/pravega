@@ -34,6 +34,11 @@ public class OrdererTest {
         }
 
         @Override
+        public long getEndOffset() {
+            return 0;
+        }
+
+        @Override
         public ByteBuffer read(long firstByteTimeout) throws EndOfSegmentException {
             return null;
         }

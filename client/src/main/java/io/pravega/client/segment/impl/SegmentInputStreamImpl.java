@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import static com.google.common.base.Preconditions.checkState;
 
 /**
- * Manages buffering and provides a synchronus to {@link AsyncSegmentInputStream}
+ * Manages buffering and provides a synchronous to {@link AsyncSegmentInputStream}
  * 
  * @see SegmentInputStream
  */
@@ -46,6 +46,8 @@ class SegmentInputStreamImpl implements SegmentInputStream {
     @GuardedBy("$lock")
     private long offset;
     @GuardedBy("$lock")
+    private long endOffset;
+    @GuardedBy("$lock")
     private boolean receivedEndOfSegment = false;
     @GuardedBy("$lock")
     private boolean receivedTruncated = false;
@@ -56,11 +58,18 @@ class SegmentInputStreamImpl implements SegmentInputStream {
         this(asyncInput, offset, DEFAULT_BUFFER_SIZE);
     }
 
-    SegmentInputStreamImpl(AsyncSegmentInputStream asyncInput, long offset, int bufferSize) {
-        Preconditions.checkArgument(offset >= 0);
+    SegmentInputStreamImpl(AsyncSegmentInputStream asyncInput, long startOffset, int bufferSize) {
+        this(asyncInput, startOffset, Long.MAX_VALUE, bufferSize);
+    }
+
+    SegmentInputStreamImpl(AsyncSegmentInputStream asyncInput, long startOffset, long endOffset, int bufferSize) {
+        Preconditions.checkArgument(startOffset >= 0);
         Preconditions.checkNotNull(asyncInput);
+        Preconditions.checkNotNull(endOffset, "endOffset");
+        Preconditions.checkArgument(endOffset > startOffset, "End Offset should be greater than start offset");
         this.asyncInput = asyncInput;
-        this.offset = offset;
+        this.offset = startOffset;
+        this.endOffset = endOffset;
         /*
          * The logic for determining the read length and buffer size are as follows.
          * If we are reading a single event, then we set the read length to be the size
@@ -97,6 +106,13 @@ class SegmentInputStreamImpl implements SegmentInputStream {
         return offset;
     }
 
+    @Override
+    @Synchronized
+    public long getEndOffset() {
+        //TODO: shrids in progress
+        return endOffset;
+    }
+
     /**
      * @see SegmentInputStream#read()
      */
@@ -124,6 +140,10 @@ class SegmentInputStreamImpl implements SegmentInputStream {
         fillBuffer();
         if (receivedTruncated) {
             throw new SegmentTruncatedException();
+        }
+        if (this.offset == this.endOffset) {
+            log.debug("We have reached the end offset.");
+            return null;
         }
         while (buffer.dataAvailable() < WireCommands.TYPE_PLUS_LENGTH_SIZE) {
             if (buffer.dataAvailable() == 0 && receivedEndOfSegment) {
@@ -197,8 +217,24 @@ class SegmentInputStreamImpl implements SegmentInputStream {
      * Issues a request if there is enough room for another request, and we aren't already waiting on one
      */
     private void issueRequestIfNeeded() {
-        if (!receivedEndOfSegment && !receivedTruncated && buffer.capacityAvailable() >= readLength && outstandingRequest == null) {
-            outstandingRequest = asyncInput.read(offset + buffer.dataAvailable(), readLength);
+        int updatedReadLength = computeReadLength(offset + buffer.dataAvailable(), readLength);
+        if (!receivedEndOfSegment && !receivedTruncated && updatedReadLength > 0 && buffer.capacityAvailable() >= updatedReadLength && outstandingRequest == null) {
+            outstandingRequest = asyncInput.read(offset + buffer.dataAvailable(), updatedReadLength);
+        }
+    }
+
+    //TODO:shrids
+    private int computeReadLength(long currentOffset, int currentReadLength) {
+        //endOffset is Long.MAX_VALUE if the endOffset is not set.
+        if (Long.MAX_VALUE == endOffset) {
+            return currentReadLength;
+        }
+
+        long numberOfBytesToRead = endOffset - currentOffset;
+        if (numberOfBytesToRead > currentReadLength) {
+            return currentReadLength;
+        } else {
+            return Math.toIntExact(numberOfBytesToRead);
         }
     }
 
