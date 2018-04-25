@@ -85,7 +85,10 @@ public class MultiSegmentStoreTest {
 
         // 4. Start segment store.
         Service segService = Utils.createPravegaSegmentStoreService(zkUri, conUris.get(0));
-        segService.start(true); // do not reuse the older segment store service.
+        if (segService.isRunning()) {
+            segService.stop(); // do not reuse the older segment store service.
+        }
+        segService.start(true); //start a new instance.
 
         List<URI> segUris = segService.getServiceDetails();
         log.info("pravega host service details: {}", segUris);
