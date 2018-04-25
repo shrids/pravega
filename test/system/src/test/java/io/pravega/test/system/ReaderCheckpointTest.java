@@ -108,9 +108,7 @@ public class ReaderCheckpointTest {
 
         //4.start host
         Service segService = Utils.createPravegaSegmentStoreService(zkUris.get(0), conUris.get(0));
-        if (!segService.isRunning()) {
-            segService.start(true);
-        }
+        segService.start(true); // do not reuse the older segment store service.
         log.debug("Pravega segment store details: {}", segService.getServiceDetails());
     }
 

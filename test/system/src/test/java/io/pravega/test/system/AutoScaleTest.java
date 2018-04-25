@@ -99,9 +99,7 @@ public class AutoScaleTest extends AbstractScaleTests {
 
         //4.start host
         Service segService = Utils.createPravegaSegmentStoreService(zkUri, conUris.get(0));
-        if (!segService.isRunning()) {
-            segService.start(true);
-        }
+        segService.start(true); // do not reuse the older segment store service.
 
         List<URI> segUris = segService.getServiceDetails();
         log.debug("pravega host service details: {}", segUris);
