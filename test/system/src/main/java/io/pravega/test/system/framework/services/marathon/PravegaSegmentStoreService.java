@@ -10,6 +10,7 @@
 package io.pravega.test.system.framework.services.marathon;
 
 import com.google.common.base.Strings;
+import io.pravega.common.Exceptions;
 import io.pravega.test.system.framework.TestFrameworkException;
 import io.pravega.test.system.framework.Utils;
 import java.net.URI;
@@ -89,6 +90,7 @@ public class PravegaSegmentStoreService extends MarathonBasedService {
         public void stop() {
             log.info("Stopping Pravega SegmentStore Service : {}", getID());
             deleteApp(getID());
+            Exceptions.handleInterrupted(() -> Thread.sleep(40 * 1000)); //sleep for 40 seconds to enable controller to detect.
         }
 
     private App createPravegaSegmentStoreApp() {
