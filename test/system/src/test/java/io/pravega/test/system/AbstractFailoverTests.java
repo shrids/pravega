@@ -672,9 +672,10 @@ abstract class AbstractFailoverTests {
 
     static void startPravegaSegmentStoreInstances(final URI zkUri, final URI controllerURI) throws ExecutionException {
         Service segService = Utils.createPravegaSegmentStoreService(zkUri, controllerURI);
-        if (!segService.isRunning()) {
-            segService.start(true);
+        if (segService.isRunning()) {
+            segService.stop(); // do not reuse the older segment store service.
         }
+        segService.start(true); //start a new instance.
         Futures.getAndHandleExceptions(segService.scaleService(3), ExecutionException::new);
         List<URI> segUris = segService.getServiceDetails();
         log.debug("Pravega Segmentstore service  details: {}", segUris);

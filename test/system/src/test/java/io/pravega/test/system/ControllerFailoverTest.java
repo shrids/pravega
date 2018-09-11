@@ -93,9 +93,10 @@ public class ControllerFailoverTest {
 
         //4.start host
         Service segService = Utils.createPravegaSegmentStoreService(zkUri, conUris.get(0));
-        if (!segService.isRunning()) {
-            segService.start(true);
+        if (segService.isRunning()) {
+            segService.stop(); // do not reuse the older segment store service.
         }
+        segService.start(true); //start a new instance.
 
         List<URI> segUris = segService.getServiceDetails();
         log.debug("pravega host service details: {}", segUris);
