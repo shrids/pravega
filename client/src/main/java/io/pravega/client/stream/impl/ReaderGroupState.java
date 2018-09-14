@@ -19,6 +19,8 @@ import io.pravega.client.state.Revisioned;
 import io.pravega.client.state.Update;
 import io.pravega.client.stream.ReaderGroupConfig;
 import io.pravega.client.stream.Stream;
+import io.pravega.client.stream.StreamCut;
+import io.pravega.client.stream.util.DistributedBarrier;
 import io.pravega.common.Exceptions;
 import io.pravega.common.ObjectBuilder;
 import io.pravega.common.io.serialization.RevisionDataInput;
@@ -50,6 +52,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Synchronized;
 import lombok.val;
+import org.apache.commons.lang3.NotImplementedException;
 
 /**
  * This class encapsulates the state machine of a reader group. The class represents the full state,
@@ -68,6 +71,8 @@ public class ReaderGroupState implements Revisioned {
     @VisibleForTesting
     @Getter(AccessLevel.PACKAGE)
     private final CheckpointState checkpointState;
+//    @Getter(AccessLevel.PACKAGE)
+//    private final DistributedBarrier barrier;
     @GuardedBy("$lock")
     private final Map<String, Long> distanceToTail;
     @GuardedBy("$lock")
@@ -88,6 +93,7 @@ public class ReaderGroupState implements Revisioned {
         this.config = config;
         this.revision = revision;
         this.checkpointState = new CheckpointState();
+//        this.barrier = new DistributedBarrier();
         this.distanceToTail = new HashMap<>();
         this.futureSegments = new HashMap<>();
         this.assignedSegments = new HashMap<>();
@@ -282,7 +288,15 @@ public class ReaderGroupState implements Revisioned {
         sb.append(" }");
         return sb.toString();
     }
-    
+
+    public boolean isStreamCutBarrierComplete(UUID id) {
+        throw new NotImplementedException("not implemented");
+    }
+
+    public Map<Stream, StreamCut> getPositionForStreamCutBarrier(String id) {
+        throw new NotImplementedException("Not Implemented");
+    }
+
     @Data
     @Builder
     @RequiredArgsConstructor
@@ -962,7 +976,100 @@ public class ReaderGroupState implements Revisioned {
             }
         }
     }
-    
+
+    @Builder
+    @RequiredArgsConstructor
+    static class StartStreamCutBarrier extends ReaderGroupStateUpdate {
+        @Getter
+        private final String id;
+
+        StartStreamCutBarrier() {
+            this(UUID.randomUUID().toString());
+        }
+
+        /**
+         * @see ReaderGroupState.ReaderGroupStateUpdate#update(ReaderGroupState)
+         */
+        @Override
+        void update(ReaderGroupState state) {
+            throw new NotImplementedException("Not Implemented");
+            // state.checkpointState.beginNewCheckpoint(checkpointId, state.getOnlineReaders(), state.getUnassignedSegments());
+        }
+
+        private static class StartStreamCutBarrierBuilder implements ObjectBuilder<StartStreamCutBarrier> {
+
+        }
+
+        private static class StartStreamCutBarrierSerializer
+                extends VersionedSerializer.WithBuilder<StartStreamCutBarrier, StartStreamCutBarrierBuilder> {
+            @Override
+            protected StartStreamCutBarrierBuilder newBuilder() {
+                return builder();
+            }
+
+            @Override
+            protected byte getWriteVersion() {
+                return 0;
+            }
+
+            @Override
+            protected void declareVersions() {
+                version(0).revision(0, this::write00, this::read00);
+            }
+
+            private void read00(RevisionDataInput in, StartStreamCutBarrierBuilder builder) throws IOException {
+                builder.id(in.readUTF());
+            }
+
+            private void write00(StartStreamCutBarrier object, RevisionDataOutput out) throws IOException {
+                out.writeUTF(object.id);
+            }
+        }
+    }
+
+    @Builder
+    @RequiredArgsConstructor
+    static class ClearStreamCutBarrierBefore extends ReaderGroupStateUpdate {
+        private final String id;
+
+        /**
+         * @see ReaderGroupState.ReaderGroupStateUpdate#update(ReaderGroupState)
+         */
+        @Override
+        void update(ReaderGroupState state) {
+            //state.checkpointState.clearCheckpointsBefore(clearUpToCheckpoint);
+        }
+
+        private static class ClearStreamCutBarrierBeforeBuilder implements ObjectBuilder<ClearStreamCutBarrierBefore> {
+
+        }
+
+        private static class ClearStreamCutBarrierBeforeSerializer
+                extends VersionedSerializer.WithBuilder<ClearStreamCutBarrierBefore, ClearStreamCutBarrierBeforeBuilder> {
+            @Override
+            protected ClearStreamCutBarrierBeforeBuilder newBuilder() {
+                return builder();
+            }
+
+            @Override
+            protected byte getWriteVersion() {
+                return 0;
+            }
+
+            @Override
+            protected void declareVersions() {
+                version(0).revision(0, this::write00, this::read00);
+            }
+
+            private void read00(RevisionDataInput in, ClearStreamCutBarrierBeforeBuilder builder) throws IOException {
+                builder.id(in.readUTF());
+            }
+
+            private void write00( ClearStreamCutBarrierBefore object, RevisionDataOutput out) throws IOException {
+                out.writeUTF(object.id);
+            }
+        }
+    }
     public static class ReaderGroupInitSerializer
             extends VersionedSerializer.MultiType<InitialUpdate<ReaderGroupState>> {
         @Override
@@ -987,7 +1094,9 @@ public class ReaderGroupState implements Revisioned {
              .serializer(SegmentCompleted.class, 7, new SegmentCompleted.SegmentCompletedSerializer())
              .serializer(CheckpointReader.class, 8, new CheckpointReader.CheckpointReaderSerializer())
              .serializer(CreateCheckpoint.class, 9, new CreateCheckpoint.CreateCheckpointSerializer())
-             .serializer(ClearCheckpointsBefore.class, 10, new ClearCheckpointsBefore.ClearCheckpointsBeforeSerializer());
+             .serializer(ClearCheckpointsBefore.class, 10, new ClearCheckpointsBefore.ClearCheckpointsBeforeSerializer())
+             .serializer(StartStreamCutBarrier.class, 10, new StartStreamCutBarrier.StartStreamCutBarrierSerializer())
+             .serializer(ClearStreamCutBarrierBefore.class, 10, new ClearStreamCutBarrierBefore.ClearStreamCutBarrierBeforeSerializer());
         }
     }
     
