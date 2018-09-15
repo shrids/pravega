@@ -13,6 +13,7 @@ import com.google.common.collect.ImmutableMap;
 import io.pravega.client.ClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.segment.impl.Segment;
+import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
 import io.pravega.client.stream.EventStreamWriter;
 import io.pravega.client.stream.EventWriterConfig;
@@ -29,18 +30,21 @@ import io.pravega.client.stream.TruncatedDataException;
 import io.pravega.client.stream.impl.Controller;
 import io.pravega.client.stream.impl.JavaSerializer;
 import io.pravega.client.stream.impl.StreamCutImpl;
+import io.pravega.common.hash.HashHelper;
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
 import io.pravega.segmentstore.server.host.handler.PravegaConnectionListener;
 import io.pravega.segmentstore.server.store.ServiceBuilder;
 import io.pravega.segmentstore.server.store.ServiceBuilderConfig;
+import io.pravega.shared.segment.StreamSegmentNameUtils;
 import io.pravega.test.common.TestUtils;
 import io.pravega.test.common.TestingServerStarter;
 import io.pravega.test.integration.demo.ControllerWrapper;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -48,6 +52,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.test.TestingServer;
@@ -56,7 +62,9 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import static io.pravega.shared.segment.StreamSegmentNameUtils.computeSegmentId;
 import static io.pravega.test.common.AssertExtensions.assertThrows;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @Slf4j
@@ -73,7 +81,19 @@ public class BoundedStreamReaderTest {
     private final int containerCount = 4;
     private final Serializer<String> serializer = new JavaSerializer<>();
     private final Random random = new Random();
-    private final Supplier<String> keyGenerator = () -> String.valueOf(random.nextInt());
+    private final Supplier<String> randomKeyGenerator = () -> String.valueOf(random.nextInt());
+    private final Map <String, String> keyReverseMap = ImmutableMap.<String, String>builder().put("0.1", "14")
+                                                                               .put("0.2", "11")
+                                                                               .put("0.3", "2")
+                                                                               .put("0.4", "1")
+                                                                               .put("0.5", "10")
+                                                                               .put("0.6", "3")
+                                                                               .put("0.7", "5")
+                                                                               .put("0.8", "7")
+                                                                               .put("0.9", "6")
+                                                                               .put("1.0", "4")
+                                                                               .build();
+    private final Function<String, String> keyGenerator = keyReverseMap::get;
     private final Function<Integer, String> getEventData = eventNumber -> String.valueOf(eventNumber) + ":constant data"; //event
     private TestingServer zkTestServer;
     private PravegaConnectionListener server;
@@ -124,10 +144,10 @@ public class BoundedStreamReaderTest {
                 EventWriterConfig.builder().build());
         //Prep the stream with data.
         //1.Write events with event size of 30
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(1)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(2)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(3)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(4)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(1)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(2)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(3)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(4)).get();
 
         @Cleanup
         ReaderGroupManager groupManager = ReaderGroupManager.withScope(SCOPE, controllerUri);
@@ -155,8 +175,8 @@ public class BoundedStreamReaderTest {
         @Cleanup
         EventStreamWriter<String> writer2 = clientFactory.createEventWriter(STREAM2, serializer,
                 EventWriterConfig.builder().build());
-        writer2.writeEvent(keyGenerator.get(), getEventData.apply(5)).get();
-        writer2.writeEvent(keyGenerator.get(), getEventData.apply(6)).get();
+        writer2.writeEvent(randomKeyGenerator.get(), getEventData.apply(5)).get();
+        writer2.writeEvent(randomKeyGenerator.get(), getEventData.apply(6)).get();
 
         //4. Verify that events can be read from STREAM2. (Events from STREAM1 are not read since endStreamCut is reached).
         readAndVerify(reader, 5, 6);
@@ -176,8 +196,8 @@ public class BoundedStreamReaderTest {
                 EventWriterConfig.builder().build());
         //Prep the stream with data.
         //1.Write events with event size of 30
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(1)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(2)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(1)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(2)).get();
 
         //2.Scale stream
         Map<Double, Double> newKeyRanges = new HashMap<>();
@@ -187,9 +207,9 @@ public class BoundedStreamReaderTest {
         scaleStream(STREAM1, newKeyRanges);
 
         //3.Write three events with event size of 30
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(3)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(4)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(5)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(3)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(4)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(5)).get();
 
         @Cleanup
         ReaderGroupManager groupManager = ReaderGroupManager.withScope(SCOPE, controllerUri);
@@ -231,6 +251,81 @@ public class BoundedStreamReaderTest {
     }
 
     @Test(timeout = 60000)
+    public void testInvalidStreamCutWithManualScale() throws Exception {
+        createScope(SCOPE);
+        createStream(STREAM1, 2);
+
+        @Cleanup
+        ClientFactory clientFactory = ClientFactory.withScope(SCOPE, controllerUri);
+        @Cleanup
+        EventStreamWriter<String> writer1 = clientFactory.createEventWriter(STREAM1, serializer,
+                                                                            EventWriterConfig.builder().build());
+        //Prep the stream with data.
+        //1.Write 2 events with event size of 30 in S0
+        writer1.writeEvent(keyGenerator.apply("0.4"), getEventData.apply(1)).get();
+        writer1.writeEvent(keyGenerator.apply("0.4"), getEventData.apply(1)).get();
+        //2. Write 2 events to S1.
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(2)).get();
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(2)).get();
+
+        //2.Scale stream
+        Map<Double, Double> newKeyRanges = new HashMap<>();
+        newKeyRanges.put(0.0, 0.6);
+        newKeyRanges.put(0.6, 1.0);
+        scaleStream(STREAM1, newKeyRanges);
+
+        //3.Write 2 events to Segment S2 [0.0, 0.6)
+        writer1.writeEvent(keyGenerator.apply("0.3"), getEventData.apply(3)).get();
+        writer1.writeEvent(keyGenerator.apply("0.3"), getEventData.apply(3)).get();
+        //4.Write 2 events to Segment S3 [0.6, 1.0)
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(4)).get();
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(4)).get();
+
+        @Cleanup
+        ReaderGroupManager groupManager = ReaderGroupManager.withScope(SCOPE, controllerUri);
+
+        ReaderGroupConfig readerGroupCfg1 = ReaderGroupConfig.builder().disableAutomaticCheckpoints()
+                                                             .stream(Stream.of(SCOPE, STREAM1))
+                                                             .build();
+        groupManager.createReaderGroup("group", readerGroupCfg1);
+        ReaderGroup readerGroup = groupManager.getReaderGroup("group");
+
+        //Create two readers
+        @Cleanup
+        EventStreamReader<String> reader1 = clientFactory.createReader("readerId1", "group", serializer,
+                                                                       ReaderConfig.builder().build());
+        @Cleanup
+        EventStreamReader<String> reader2 = clientFactory.createReader("readerId2", "group", serializer,
+                                                                       ReaderConfig.builder().build());
+
+        //5. Read 1 event on both the readers.
+        String event4Reader1 = reader1.readNextEvent(10000).getEvent();
+        String event4Reader2 = reader2.readNextEvent(10000).getEvent();
+        assertTrue(event4Reader1 != null);
+        assertTrue(event4Reader2 != null);
+
+        //6. Continue reading on the reader where event data 2 is observed.
+        if (event4Reader1.equals(getEventData.apply(2))) {
+            assertEquals(getEventData.apply(2), reader1.readNextEvent(10000).getEvent());
+            EventRead<String> stringEventRead = reader1.readNextEvent(10000);
+            assertEquals(getEventData.apply(4), stringEventRead.getEvent());
+            reader1.close();
+            readerGroup.readerOffline("readerId1", stringEventRead.getPosition());
+
+        } else {
+            assertEquals(getEventData.apply(2), reader2.readNextEvent(10000).getEvent());
+            EventRead<String> stringEventRead = reader2.readNextEvent(10000);
+            assertEquals(getEventData.apply(4), stringEventRead.getEvent());
+            reader2.close();
+            readerGroup.readerOffline("readerId2", stringEventRead.getPosition());
+        }
+
+        Map<Segment, Long> segmentMap = readerGroup.getStreamCuts().get(Stream.of(SCOPE, STREAM1)).asImpl().getPositions();
+        assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(0, 0))));
+        assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(3, 1))));
+    }
+
+    @Test(timeout = 60000)
     public void testBoundedStreamWithTruncationTest() throws Exception {
         createScope(SCOPE);
         createStream(STREAM3);
@@ -242,10 +337,10 @@ public class BoundedStreamReaderTest {
                 EventWriterConfig.builder().build());
         //Prep the stream with data.
         //1.Write events with event size of 30
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(1)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(2)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(3)).get();
-        writer1.writeEvent(keyGenerator.get(), getEventData.apply(4)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(1)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(2)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(3)).get();
+        writer1.writeEvent(randomKeyGenerator.get(), getEventData.apply(4)).get();
 
         @Cleanup
         ReaderGroupManager groupManager = ReaderGroupManager.withScope(SCOPE, controllerUri);
@@ -332,10 +427,22 @@ public class BoundedStreamReaderTest {
         controller.createStream(config).get();
     }
 
+    private void createStream(String streamName, int intialSegments) throws Exception {
+        Controller controller = controllerWrapper.getController();
+        StreamConfiguration config = StreamConfiguration.builder()
+                                                        .scope(SCOPE)
+                                                        .streamName(streamName)
+                                                        .scalingPolicy(ScalingPolicy.fixed(intialSegments))
+                                                        .build();
+        controller.createStream(config).get();
+    }
+
     private void scaleStream(final String streamName, final Map<Double, Double> keyRanges) throws Exception {
         Stream stream = Stream.of(SCOPE, streamName);
         Controller controller = controllerWrapper.getController();
-        assertTrue(controller.scaleStream(stream, Collections.singletonList(0L), keyRanges, executor).getFuture().get());
+        List<Long> currentSegments = controller.getCurrentSegments(SCOPE, streamName).join().getSegments()
+                                                         .stream().map(Segment::getSegmentId).collect(Collectors.toList());
+        assertTrue(controller.scaleStream(stream, currentSegments, keyRanges, executor).getFuture().get());
     }
 
     private void truncateStream(final String streamName, final StreamCut streamCut) throws Exception {
