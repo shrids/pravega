@@ -25,76 +25,43 @@ import io.pravega.client.stream.ReaderGroupConfig;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.Stream;
 import io.pravega.client.stream.StreamConfiguration;
+import io.pravega.client.stream.StreamCut;
 import io.pravega.client.stream.impl.ClientFactoryImpl;
+import io.pravega.client.stream.impl.Controller;
 import io.pravega.client.stream.impl.JavaSerializer;
-import io.pravega.common.concurrent.ExecutorServiceHelpers;
+import io.pravega.common.Exceptions;
+import io.pravega.common.concurrent.Futures;
 import io.pravega.controller.server.eventProcessor.LocalController;
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
 import io.pravega.segmentstore.server.host.handler.PravegaConnectionListener;
 import io.pravega.segmentstore.server.store.ServiceBuilder;
 import io.pravega.segmentstore.server.store.ServiceBuilderConfig;
-import io.pravega.test.common.TestUtils;
+import io.pravega.test.common.InlineExecutor;
 import io.pravega.test.common.TestingServerStarter;
 import io.pravega.test.integration.demo.ControllerWrapper;
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.curator.test.TestingServer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.net.URI;
+import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @Slf4j
-public class EndToEndReaderGroupTest {
+public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
 
-    private final int controllerPort = TestUtils.getAvailableListenPort();
-    private final String serviceHost = "localhost";
-    private final URI controllerURI = URI.create("tcp://" + serviceHost + ":" + controllerPort);
-    private final int servicePort = TestUtils.getAvailableListenPort();
-    private final int containerCount = 4;
-    private TestingServer zkTestServer;
-    private PravegaConnectionListener server;
-    private ControllerWrapper controllerWrapper;
-    private ServiceBuilder serviceBuilder;
-    private ScheduledExecutorService executor;
-
-    @Before
-    public void setUp() throws Exception {
-        executor = Executors.newSingleThreadScheduledExecutor();
-        zkTestServer = new TestingServerStarter().start();
-
-        serviceBuilder = ServiceBuilder.newInMemoryBuilder(ServiceBuilderConfig.getDefaultConfig());
-        serviceBuilder.initialize();
-        StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
-
-        server = new PravegaConnectionListener(false, servicePort, store);
-        server.startListening();
-
-        controllerWrapper = new ControllerWrapper(zkTestServer.getConnectString(),
-                false,
-                controllerPort,
-                serviceHost,
-                servicePort,
-                containerCount);
-        controllerWrapper.awaitRunning();
+    @Override
+    protected int getThreadPoolSize() {
+        return 1;
     }
 
-    @After
-    public void tearDown() throws Exception {
-        ExecutorServiceHelpers.shutdown(executor);
-        controllerWrapper.close();
-        server.close();
-        serviceBuilder.close();
-        zkTestServer.close();
-    }
 
     @Test(timeout = 30000)
     public void testReaderOffline() throws Exception {
@@ -204,6 +171,49 @@ public class EndToEndReaderGroupTest {
         assertTrue(managedStreams.contains(Stream.of(scopeB, streamName).getScopedName()));
     }
 
+    @Test //TODO: Add timeout
+    public void getCurrentStreamCutTest() throws Exception{
+        createScope(SCOPE);
+        createStream(SCOPE, STREAM, ScalingPolicy.fixed(1));
+
+        @Cleanup
+        ClientFactory clientFactory = ClientFactory.withScope(SCOPE, controllerURI);
+        @Cleanup
+        EventStreamWriter<String> writer = clientFactory.createEventWriter(STREAM, serializer,
+                                                                            EventWriterConfig.builder().build());
+        //Prep the stream with data.
+        //1.Write events with event size of 30
+        writer.writeEvent(randomKeyGenerator.get(), getEventData.apply(1)).join();
+        writer.writeEvent(randomKeyGenerator.get(), getEventData.apply(2)).join();
+        writer.writeEvent(randomKeyGenerator.get(), getEventData.apply(3)).join();
+        writer.writeEvent(randomKeyGenerator.get(), getEventData.apply(4)).join();
+
+        @Cleanup
+        ReaderGroupManager groupManager = ReaderGroupManager.withScope(SCOPE, controllerURI);
+        final String RG_NAME = "group";
+        groupManager.createReaderGroup(RG_NAME, ReaderGroupConfig
+                .builder().disableAutomaticCheckpoints()
+                .stream(Stream.of(SCOPE, STREAM))
+                .build());
+
+        ReaderGroup readerGroup = groupManager.getReaderGroup(RG_NAME);
+
+        //Create a reader
+        @Cleanup
+        EventStreamReader<String> reader = clientFactory.createReader("readerId", RG_NAME, serializer,
+                                                                      ReaderConfig.builder().build());
+
+
+        readAndVerify(reader, 1);
+        @Cleanup("shutdown")
+        final InlineExecutor backgroundExecutor = new InlineExecutor();
+        CompletableFuture<Map<Stream, StreamCut>> streamCut = readerGroup.getCurrentStreamCut(backgroundExecutor);
+
+        assertTrue(Futures.await(streamCut));
+
+
+    }
+
     private StreamConfiguration getStreamConfig(String scope, String streamName) {
         return StreamConfiguration.builder()
                                   .scope(scope)
@@ -220,4 +230,5 @@ public class EndToEndReaderGroupTest {
 
         writer.writeEvent( "0", Integer.toString(eventId)).join();
     }
+
 }

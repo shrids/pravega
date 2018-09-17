@@ -50,14 +50,15 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Synchronized;
+import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import org.apache.commons.lang3.NotImplementedException;
 
 /**
  * This class encapsulates the state machine of a reader group. The class represents the full state,
  * and each of the nested classes are state transitions that can occur.
  */
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class ReaderGroupState implements Revisioned {
 
     private static final long ASSUMED_LAG_MILLIS = 30000;
@@ -70,6 +71,8 @@ public class ReaderGroupState implements Revisioned {
     @VisibleForTesting
     @Getter(AccessLevel.PACKAGE)
     private final CheckpointState checkpointState;
+    @Getter(AccessLevel.PACKAGE)
+    private final StreamCutBarrierState streamCutBarrierState;
     @GuardedBy("$lock")
     private final Map<String, Long> distanceToTail;
     @GuardedBy("$lock")
@@ -90,6 +93,7 @@ public class ReaderGroupState implements Revisioned {
         this.config = config;
         this.revision = revision;
         this.checkpointState = new CheckpointState();
+        this.streamCutBarrierState = new StreamCutBarrierState();
         this.distanceToTail = new HashMap<>();
         this.futureSegments = new HashMap<>();
         this.assignedSegments = new HashMap<>();
@@ -290,7 +294,7 @@ public class ReaderGroupState implements Revisioned {
     }
 
     public Map<Stream, StreamCut> getPositionForStreamCutBarrier(String id) {
-        throw new NotImplementedException("Not Implemented");
+        return streamCutBarrierState.getPositionsForCompletedCheckpoint(id);
     }
 
     @Data
@@ -349,6 +353,7 @@ public class ReaderGroupState implements Revisioned {
 
         private final ReaderGroupConfig config;
         private final CheckpointState checkpointState;
+        private final StreamCutBarrierState streamCutBarrierState;
         private final Map<String, Long> distanceToTail;
         private final Map<Segment, Set<Long>> futureSegments;
         private final Map<String, Map<Segment, Long>> assignedSegments;
@@ -359,6 +364,7 @@ public class ReaderGroupState implements Revisioned {
             synchronized (state.$lock) {
                 config = state.config;
                 checkpointState = state.checkpointState.copy();
+                streamCutBarrierState = state.streamCutBarrierState.copy();
                 distanceToTail = new HashMap<>(state.distanceToTail);
                 futureSegments = new HashMap<>();
                 for (Entry<Segment, Set<Long>> entry : state.futureSegments.entrySet()) {
@@ -372,16 +378,16 @@ public class ReaderGroupState implements Revisioned {
                 endSegments = state.endSegments;
             }
         }
-        
+
         @Override
         public ReaderGroupState create(String scopedStreamName, Revision revision) {
-            return new ReaderGroupState(scopedStreamName, config, revision, checkpointState, distanceToTail,
+            return new ReaderGroupState(scopedStreamName, config, revision, checkpointState, streamCutBarrierState, distanceToTail,
                                         futureSegments, assignedSegments, unassignedSegments, endSegments);
         }
-        
+
         @VisibleForTesting
         static class CompactReaderGroupStateBuilder implements ObjectBuilder<CompactReaderGroupState> {
-            
+
         }
         
         static class CompactReaderGroupStateSerializer extends VersionedSerializer.WithBuilder<CompactReaderGroupState, CompactReaderGroupStateBuilder> {
@@ -988,8 +994,8 @@ public class ReaderGroupState implements Revisioned {
          */
         @Override
         void update(ReaderGroupState state) {
-            throw new NotImplementedException("Not Implemented");
-            // state.checkpointState.beginNewCheckpoint(checkpointId, state.getOnlineReaders(), state.getUnassignedSegments());
+            log.info("==> create a new StreamCutBarrier update : {}", id);
+            state.streamCutBarrierState.beginNewStreamCutBarrier(id, state.getOnlineReaders(), state.getUnassignedSegments());
         }
 
         private static class StartStreamCutBarrierBuilder implements ObjectBuilder<StartStreamCutBarrier> {
@@ -1033,7 +1039,8 @@ public class ReaderGroupState implements Revisioned {
          */
         @Override
         void update(ReaderGroupState state) {
-            //state.checkpointState.clearCheckpointsBefore(clearUpToCheckpoint);
+            log.info("==> Clear Checkpoints before id : {}", id);
+            state.streamCutBarrierState.clearCheckpointsBefore(id);
         }
 
         private static class ClearStreamCutBarrierBeforeBuilder implements ObjectBuilder<ClearStreamCutBarrierBefore> {
