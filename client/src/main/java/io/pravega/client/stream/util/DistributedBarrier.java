@@ -13,7 +13,7 @@ import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-public class DistributedBarrier implements Barrier{
+public class DistributedBarrier implements Barrier {
     @Override
     public int await() throws BrokenBarrierException, InterruptedException {
         return 0;

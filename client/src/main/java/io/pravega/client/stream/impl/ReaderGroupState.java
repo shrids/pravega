@@ -20,7 +20,6 @@ import io.pravega.client.state.Update;
 import io.pravega.client.stream.ReaderGroupConfig;
 import io.pravega.client.stream.Stream;
 import io.pravega.client.stream.StreamCut;
-import io.pravega.client.stream.util.DistributedBarrier;
 import io.pravega.common.Exceptions;
 import io.pravega.common.ObjectBuilder;
 import io.pravega.common.io.serialization.RevisionDataInput;
@@ -71,8 +70,6 @@ public class ReaderGroupState implements Revisioned {
     @VisibleForTesting
     @Getter(AccessLevel.PACKAGE)
     private final CheckpointState checkpointState;
-//    @Getter(AccessLevel.PACKAGE)
-//    private final DistributedBarrier barrier;
     @GuardedBy("$lock")
     private final Map<String, Long> distanceToTail;
     @GuardedBy("$lock")
@@ -93,7 +90,6 @@ public class ReaderGroupState implements Revisioned {
         this.config = config;
         this.revision = revision;
         this.checkpointState = new CheckpointState();
-//        this.barrier = new DistributedBarrier();
         this.distanceToTail = new HashMap<>();
         this.futureSegments = new HashMap<>();
         this.assignedSegments = new HashMap<>();
@@ -1070,6 +1066,7 @@ public class ReaderGroupState implements Revisioned {
             }
         }
     }
+
     public static class ReaderGroupInitSerializer
             extends VersionedSerializer.MultiType<InitialUpdate<ReaderGroupState>> {
         @Override
@@ -1095,8 +1092,8 @@ public class ReaderGroupState implements Revisioned {
              .serializer(CheckpointReader.class, 8, new CheckpointReader.CheckpointReaderSerializer())
              .serializer(CreateCheckpoint.class, 9, new CreateCheckpoint.CreateCheckpointSerializer())
              .serializer(ClearCheckpointsBefore.class, 10, new ClearCheckpointsBefore.ClearCheckpointsBeforeSerializer())
-             .serializer(StartStreamCutBarrier.class, 10, new StartStreamCutBarrier.StartStreamCutBarrierSerializer())
-             .serializer(ClearStreamCutBarrierBefore.class, 10, new ClearStreamCutBarrierBefore.ClearStreamCutBarrierBeforeSerializer());
+             .serializer(StartStreamCutBarrier.class, 11, new StartStreamCutBarrier.StartStreamCutBarrierSerializer())
+             .serializer(ClearStreamCutBarrierBefore.class, 12, new ClearStreamCutBarrierBefore.ClearStreamCutBarrierBeforeSerializer());
         }
     }
     
