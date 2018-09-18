@@ -24,7 +24,6 @@ import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.NotImplementedException;
 
 import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
@@ -159,14 +158,12 @@ public class StreamCutBarrierState {
      * @return A copy of this object
      */
     StreamCutBarrierState copy() {
-        //        List<String> cps = new ArrayList<>(ids);
-        //        Map<String, List<String>> ucph = new HashMap<>(remainingParties.size());
-        //        remainingParties.forEach((cp, hosts) -> ucph.put(cp, new ArrayList<>(hosts)));
-        //        Map<String, Map<Segment, Long>> cpps = new HashMap<>();
-        //        checkpointPositions.forEach((cp, pos) -> cpps.put(cp, new HashMap<>(pos)));
-        //        Map<Segment, Long> lcp = lastCheckpointPosition == null ? null : new HashMap<>(lastCheckpointPosition);
-        //        return new StreamCutBarrierState(cps, ucph, cpps, lcp);
-        throw new NotImplementedException("not implemented");
+        List<String> cps = new ArrayList<>(ids);
+        Map<String, List<String>> ucph = new HashMap<>(remainingParties.size());
+        remainingParties.forEach((cp, hosts) -> ucph.put(cp, new ArrayList<>(hosts)));
+        Map<String, Map<Stream, Map<Segment, Long>>> cpps = new HashMap<>();
+        streamCutBarrierPositions.forEach((cp, pos) -> cpps.put(cp, new HashMap<>(pos))); //TODO: fix bug?
+        return new StreamCutBarrierState(cps, ucph, cpps);
     }
     
     @Override
