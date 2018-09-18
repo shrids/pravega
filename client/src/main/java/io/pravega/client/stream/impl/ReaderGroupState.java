@@ -290,11 +290,12 @@ public class ReaderGroupState implements Revisioned {
     }
 
     public boolean isStreamCutBarrierComplete(UUID id) {
-        throw new NotImplementedException("not implemented");
+        return streamCutBarrierState.isStreamCutBarrierComplete(id.toString());
     }
 
     public Map<Stream, StreamCut> getPositionForStreamCutBarrier(String id) {
-        return streamCutBarrierState.getPositionsForCompletedCheckpoint(id);
+        return streamCutBarrierState.getPositionsForCompletedStreamCutBarrier(id).entrySet().stream()
+                                    .collect(Collectors.toMap(Entry::getKey, o -> new StreamCutImpl(o.getKey(), o.getValue())));
     }
 
     @Data
@@ -1040,7 +1041,7 @@ public class ReaderGroupState implements Revisioned {
         @Override
         void update(ReaderGroupState state) {
             log.info("==> Clear Checkpoints before id : {}", id);
-            state.streamCutBarrierState.clearCheckpointsBefore(id);
+            state.streamCutBarrierState.clearStreamCutBarrierBefore(id);
         }
 
         private static class ClearStreamCutBarrierBeforeBuilder implements ObjectBuilder<ClearStreamCutBarrierBefore> {

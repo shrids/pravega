@@ -208,7 +208,7 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
         @Cleanup("shutdown")
         final InlineExecutor backgroundExecutor = new InlineExecutor();
         CompletableFuture<Map<Stream, StreamCut>> streamCut = readerGroup.getCurrentStreamCut(backgroundExecutor);
-
+        reader.readNextEvent(15000);
         assertTrue(Futures.await(streamCut));
 
 

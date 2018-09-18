@@ -388,6 +388,7 @@ public class ReaderGroupStateManager {
         if (automaticCpInterval <= 0 || checkpointTimer.hasRemaining() || state.hasOngoingCheckpoint()) {
             return null;
         }
+        // This is used to generate automatic check points.
         sync.updateState((s, u) -> {
             if (!s.hasOngoingCheckpoint()) {
                 CreateCheckpoint newCp = new CreateCheckpoint();
