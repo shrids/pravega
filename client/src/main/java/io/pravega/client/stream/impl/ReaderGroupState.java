@@ -289,10 +289,17 @@ public class ReaderGroupState implements Revisioned {
         return sb.toString();
     }
 
+    @Synchronized
+    String getBarrierIdForReader(String readerName) {
+        return streamCutBarrierState.getBarrierIdForParty(readerName);
+    }
+
+    @Synchronized
     public boolean isStreamCutBarrierComplete(UUID id) {
         return streamCutBarrierState.isStreamCutBarrierComplete(id.toString());
     }
 
+    @Synchronized
     public Map<Stream, StreamCut> getPositionForStreamCutBarrier(String id) {
         return streamCutBarrierState.getPositionsForCompletedStreamCutBarrier(id).entrySet().stream()
                                     .collect(Collectors.toMap(Entry::getKey, o -> new StreamCutImpl(o.getKey(), o.getValue())));

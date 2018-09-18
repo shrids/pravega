@@ -23,6 +23,7 @@ import io.pravega.common.util.ByteArraySegment;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.NotImplementedException;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -33,7 +34,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,6 +43,7 @@ import static java.util.stream.Collectors.toMap;
 
 @NotThreadSafe
 @EqualsAndHashCode
+@Slf4j
 public class StreamCutBarrierState {
 
     private static final StreamCutBarrierStateSerializer SERIALIZER = new StreamCutBarrierStateSerializer();
@@ -57,24 +58,19 @@ public class StreamCutBarrierState {
      */
     private final Map<String, Map<Stream, Map<Segment, Long>>> streamCutBarrierPositions;
 
-    private Map<Stream, Map<Segment, Long>> lastCheckpointPosition; //TODO:
-
-
     public StreamCutBarrierState() {
-        this(new ArrayList<>(), new HashMap<>(), new HashMap<>(), null);
+        this(new ArrayList<>(), new HashMap<>(), new HashMap<>());
     }
 
     @Builder
     private StreamCutBarrierState(List<String> checkpoints, Map<String, List<String>> remainingParties,
-                                  Map<String, Map<Stream, Map<Segment, Long>>> streamCutBarrierPositions,
-                                  Map<Stream, Map<Segment, Long>> lastCheckpointPosition) {
+                                  Map<String, Map<Stream, Map<Segment, Long>>> streamCutBarrierPositions) {
         Preconditions.checkNotNull(checkpoints);
         Preconditions.checkNotNull(remainingParties);
         Preconditions.checkNotNull(streamCutBarrierPositions);
         this.ids = checkpoints;
         this.remainingParties = remainingParties;
         this.streamCutBarrierPositions = streamCutBarrierPositions;
-        this.lastCheckpointPosition = lastCheckpointPosition;
     }
     
     void beginNewStreamCutBarrier(String barrierId, Set<String> parties, Map<Segment, Long> knownPositions) {
@@ -92,8 +88,8 @@ public class StreamCutBarrierState {
                         .collect(groupingBy(o -> o.getKey().getStream(), toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
     
-    String getCheckpointForReader(String readerName) {
-        OptionalInt min = getCheckpointsForReader(readerName).stream().mapToInt(ids::indexOf).min();
+    String getBarrierIdForParty(final String party) {
+        OptionalInt min = getBarrierIds(party).stream().mapToInt(ids::indexOf).min();
         if (min.isPresent()) {
             return ids.get(min.getAsInt());
         } else {
@@ -101,21 +97,22 @@ public class StreamCutBarrierState {
         }
     }
     
-    private List<String> getCheckpointsForReader(String readerName) {
+    private List<String> getBarrierIds(String party) {
         return remainingParties.entrySet()
                                .stream()
-                               .filter(entry -> entry.getValue().contains(readerName))
+                               .filter(entry -> entry.getValue().contains(party))
                                .map(Map.Entry::getKey)
                                .collect(Collectors.toList());
     }
 
-    void removeReader(String readerName, Map<Segment, Long> position) {
-        for (String checkpointId : getCheckpointsForReader(readerName)) {
-            joinStreamCutBarrier(checkpointId, readerName, position);
+    void removeParty(String party, Map<Segment, Long> position) {
+        for (String barrierId : getBarrierIds(party)) {
+            joinStreamCutBarrier(barrierId, party, position);
         }
     }
     
     void joinStreamCutBarrier(String barrierId, String party, Map<Segment, Long> position) {
+        log.debug("==> joinStreamCutBarrier for BarrierId: {} with party: {} and postion:{}", barrierId, party, position);
         List<String> parties = remainingParties.get(barrierId);
         if (parties != null) {
             boolean removed = parties.remove(party);
@@ -124,8 +121,7 @@ public class StreamCutBarrierState {
             positions.putAll(convertToStreamMap(position));
             if (parties.isEmpty()) {
                 remainingParties.remove(barrierId);
-                //StreamCutBarrier operation completed for all parties, update the last checkpoint position.
-                lastCheckpointPosition = streamCutBarrierPositions.get(barrierId);
+                log.info("==> All parties have joined the BarrierId: {}", barrierId);
             }
         }
     }
@@ -140,12 +136,6 @@ public class StreamCutBarrierState {
         }
         return streamCutBarrierPositions.get(barrierId);
     }
-
-    //TODO: is it required?
-    Optional<Map<Stream, Map<Segment, Long>>> getPositionsForLatestCompletedCheckpoint() {
-        return Optional.ofNullable(lastCheckpointPosition);
-    }
-
 
     boolean hasOngoingStreamCutBarrier() {
         return !remainingParties.isEmpty();
@@ -192,7 +182,6 @@ public class StreamCutBarrierState {
 
     @VisibleForTesting
     static class StreamCutBarrierStateBuilder implements ObjectBuilder<StreamCutBarrierState> {
-
     }
 
     private static class StreamCutBarrierStateSerializer
@@ -220,7 +209,6 @@ public class StreamCutBarrierState {
             builder.checkpoints(input.readCollection(stringDeserializer, ArrayList::new));
             builder.remainingParties(input.readMap(stringDeserializer, in -> in.readCollection(stringDeserializer, ArrayList::new)));
             builder.streamCutBarrierPositions(input.readMap(stringDeserializer, in -> in.readMap(streamElementDeserializer, in1 -> in1.readMap(segmentDeserializer, longDeserializer))));
-            //builder.lastCheckpointPosition(input.readMap(segmentDeserializer, longDeserializer)); // enable only if required
         }
 
         private void write00(StreamCutBarrierState object, RevisionDataOutput output) throws IOException {
@@ -231,7 +219,6 @@ public class StreamCutBarrierState {
             output.writeCollection(object.ids, stringSerializer);
             output.writeMap(object.remainingParties, stringSerializer, (out, hosts) -> out.writeCollection(hosts, stringSerializer));
             output.writeMap(object.streamCutBarrierPositions, stringSerializer, (out, map) -> out.writeMap(map, streamSerializer, (out1, map1) -> out1.writeMap(map1, segmentSerializer, longSerializer)));
-            //output.writeMap(object.lastCheckpointPosition, segmentSerializer, longSerializer); // enable only if required.
         }
     }
 

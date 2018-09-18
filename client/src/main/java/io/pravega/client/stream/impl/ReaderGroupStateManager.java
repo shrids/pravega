@@ -380,6 +380,9 @@ public class ReaderGroupStateManager {
         if (!state.isReaderOnline(readerId)) {
             throw new ReinitializationRequiredException();
         }
+        if (state.getBarrierIdForReader(readerId) != null) {
+            // update state synchronizer with postion for the barrier.
+        }
         String checkpoint = state.getCheckpointForReader(readerId);
         if (checkpoint != null) {
             checkpointTimer.reset(Duration.ofMillis(automaticCpInterval));
@@ -388,7 +391,7 @@ public class ReaderGroupStateManager {
         if (automaticCpInterval <= 0 || checkpointTimer.hasRemaining() || state.hasOngoingCheckpoint()) {
             return null;
         }
-        // This is used to generate automatic check points.
+        // This is used to generate automatic check points ??
         sync.updateState((s, u) -> {
             if (!s.hasOngoingCheckpoint()) {
                 CreateCheckpoint newCp = new CreateCheckpoint();
