@@ -1039,6 +1039,62 @@ public class ReaderGroupState implements Revisioned {
 
     @Builder
     @RequiredArgsConstructor
+    static class JoinStreamCutBarrier extends ReaderGroupStateUpdate {
+        private final String barrierId;
+        private final String party;
+        private final Map<Segment, Long> positions; //Immutable
+
+        /**
+         * @see ReaderGroupState.ReaderGroupStateUpdate#update(ReaderGroupState)
+         */
+        @Override
+        void update(ReaderGroupState state) {
+            state.streamCutBarrierState.joinStreamCutBarrier(barrierId, party, positions);
+
+            // Each reader updates the offsets of its assigned segments with the current positions for this checkpoint.
+            final Map<Segment, Long> readerPositions = state.assignedSegments.get(party);
+            Preconditions.checkState(readerPositions.size() == positions.size(), "Assigned segments should be same as the lastest position");
+            for (Entry<Segment, Long> entry : positions.entrySet()) {
+                readerPositions.replace(entry.getKey(), entry.getValue());
+            }
+        }
+
+        private static class JoinStreamCutBarrierBuilder implements ObjectBuilder<JoinStreamCutBarrier> {
+        }
+
+        private static class JoinStreamCutBarrierSerializer
+                extends VersionedSerializer.WithBuilder<JoinStreamCutBarrier, JoinStreamCutBarrierBuilder> {
+            @Override
+            protected JoinStreamCutBarrierBuilder newBuilder() {
+                return builder();
+            }
+
+            @Override
+            protected byte getWriteVersion() {
+                return 0;
+            }
+
+            @Override
+            protected void declareVersions() {
+                version(0).revision(0, this::write00, this::read00);
+            }
+
+            private void read00(RevisionDataInput in, JoinStreamCutBarrierBuilder builder) throws IOException {
+                builder.barrierId(in.readUTF());
+                builder.party(in.readUTF());
+                builder.positions(in.readMap(i -> Segment.fromScopedName(i.readUTF()), RevisionDataInput::readLong));
+            }
+
+            private void write00(JoinStreamCutBarrier object, RevisionDataOutput out) throws IOException {
+                out.writeUTF(object.barrierId);
+                out.writeUTF(object.party);
+                out.writeMap(object.positions, (o, segment) -> o.writeUTF(segment.getScopedName()), RevisionDataOutput::writeLong);
+            }
+        }
+    }
+
+    @Builder
+    @RequiredArgsConstructor
     static class ClearStreamCutBarrierBefore extends ReaderGroupStateUpdate {
         private final String id;
 

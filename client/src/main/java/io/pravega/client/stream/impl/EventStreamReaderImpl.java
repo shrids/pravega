@@ -150,6 +150,8 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
     @GuardedBy("readers")
     private String updateGroupStateIfNeeded() throws ReinitializationRequiredException {
         try {
+            // join StreamCut Barrier and update state with latest positions.
+            groupState.checkAndJoinStreamCutBarrier(getPosition().getOwnedSegmentsWithOffsets());
             String checkpoint = groupState.getCheckpoint();
             if (checkpoint == null) {
                 if (atCheckpoint) {
