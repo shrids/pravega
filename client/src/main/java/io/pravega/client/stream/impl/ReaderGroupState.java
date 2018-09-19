@@ -1164,7 +1164,8 @@ public class ReaderGroupState implements Revisioned {
              .serializer(CreateCheckpoint.class, 9, new CreateCheckpoint.CreateCheckpointSerializer())
              .serializer(ClearCheckpointsBefore.class, 10, new ClearCheckpointsBefore.ClearCheckpointsBeforeSerializer())
              .serializer(StartStreamCutBarrier.class, 11, new StartStreamCutBarrier.StartStreamCutBarrierSerializer())
-             .serializer(ClearStreamCutBarrierBefore.class, 12, new ClearStreamCutBarrierBefore.ClearStreamCutBarrierBeforeSerializer());
+             .serializer(ClearStreamCutBarrierBefore.class, 12, new ClearStreamCutBarrierBefore.ClearStreamCutBarrierBeforeSerializer())
+             .serializer(JoinStreamCutBarrier.class, 13, new JoinStreamCutBarrier.JoinStreamCutBarrierSerializer());
         }
     }
     

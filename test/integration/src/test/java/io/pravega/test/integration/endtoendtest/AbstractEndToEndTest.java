@@ -9,6 +9,7 @@
  */
 package io.pravega.test.integration.endtoendtest;
 
+import io.pravega.client.segment.impl.Segment;
 import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
 import io.pravega.client.stream.ReinitializationRequiredException;
@@ -22,6 +23,7 @@ import io.pravega.segmentstore.contracts.StreamSegmentStore;
 import io.pravega.segmentstore.server.host.handler.PravegaConnectionListener;
 import io.pravega.segmentstore.server.store.ServiceBuilder;
 import io.pravega.segmentstore.server.store.ServiceBuilderConfig;
+import io.pravega.shared.segment.StreamSegmentNameUtils;
 import io.pravega.test.common.TestUtils;
 import io.pravega.test.common.TestingServerStarter;
 import io.pravega.test.common.ThreadPooledTestSuite;
@@ -118,5 +120,9 @@ public class AbstractEndToEndTest extends ThreadPooledTestSuite {
 
         //Verify if we have recieved the events according to the event ids provided.
         Arrays.stream(eventIds).forEach(i -> assertTrue(results.contains(getEventData.apply(i))));
+    }
+
+    protected Segment getSegment(int segmentNumber, int epoch) {
+        return new Segment(SCOPE, STREAM, StreamSegmentNameUtils.computeSegmentId(0, 0));
     }
 }

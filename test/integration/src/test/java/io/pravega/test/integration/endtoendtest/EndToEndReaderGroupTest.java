@@ -9,16 +9,19 @@
  */
 package io.pravega.test.integration.endtoendtest;
 
+import com.google.common.collect.ImmutableMap;
 import io.pravega.client.ClientConfig;
 import io.pravega.client.ClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.impl.ReaderGroupManagerImpl;
 import io.pravega.client.netty.impl.ConnectionFactory;
 import io.pravega.client.netty.impl.ConnectionFactoryImpl;
+import io.pravega.client.segment.impl.Segment;
 import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
 import io.pravega.client.stream.EventStreamWriter;
 import io.pravega.client.stream.EventWriterConfig;
+import io.pravega.client.stream.Position;
 import io.pravega.client.stream.ReaderConfig;
 import io.pravega.client.stream.ReaderGroup;
 import io.pravega.client.stream.ReaderGroupConfig;
@@ -29,6 +32,8 @@ import io.pravega.client.stream.StreamCut;
 import io.pravega.client.stream.impl.ClientFactoryImpl;
 import io.pravega.client.stream.impl.Controller;
 import io.pravega.client.stream.impl.JavaSerializer;
+import io.pravega.client.stream.impl.StreamCutImpl;
+import io.pravega.client.stream.impl.StreamCutInternal;
 import io.pravega.common.Exceptions;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.controller.server.eventProcessor.LocalController;
@@ -36,6 +41,7 @@ import io.pravega.segmentstore.contracts.StreamSegmentStore;
 import io.pravega.segmentstore.server.host.handler.PravegaConnectionListener;
 import io.pravega.segmentstore.server.store.ServiceBuilder;
 import io.pravega.segmentstore.server.store.ServiceBuilderConfig;
+import io.pravega.shared.segment.StreamSegmentNameUtils;
 import io.pravega.test.common.InlineExecutor;
 import io.pravega.test.common.TestingServerStarter;
 import io.pravega.test.integration.demo.ControllerWrapper;
@@ -46,6 +52,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -171,7 +178,7 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
         assertTrue(managedStreams.contains(Stream.of(scopeB, streamName).getScopedName()));
     }
 
-    @Test //TODO: Add timeout
+    @Test(timeout = 30000)
     public void getCurrentStreamCutTest() throws Exception{
         createScope(SCOPE);
         createStream(SCOPE, STREAM, ScalingPolicy.fixed(1));
@@ -203,16 +210,19 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
         EventStreamReader<String> reader = clientFactory.createReader("readerId", RG_NAME, serializer,
                                                                       ReaderConfig.builder().build());
 
-
         readAndVerify(reader, 1);
         @Cleanup("shutdown")
         final InlineExecutor backgroundExecutor = new InlineExecutor();
         CompletableFuture<Map<Stream, StreamCut>> streamCut = readerGroup.getCurrentStreamCut(backgroundExecutor);
         reader.readNextEvent(15000);
-        assertTrue(Futures.await(streamCut));
+        assertTrue(Futures.await(streamCut)); // wait until the streamCut is obtained.
 
+        //expected segment 0 offset is 30L.
+        Map<Segment, Long> map = ImmutableMap.of(getSegment(0, 0), 30L);
+        assertEquals(map, streamCut.join().get(Stream.of(SCOPE, STREAM)).asImpl().getPositions() );
 
     }
+
 
     private StreamConfiguration getStreamConfig(String scope, String streamName) {
         return StreamConfiguration.builder()
