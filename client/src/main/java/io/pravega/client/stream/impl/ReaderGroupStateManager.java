@@ -376,9 +376,10 @@ public class ReaderGroupStateManager {
     void checkAndJoinStreamCutBarrier(Map<Segment, Long> ownedSegmentsWithOffset) throws ReinitializationRequiredException {
         fetchUpdatesIfNeeded();
         ReaderGroupState state = sync.getState();
-        // Fetch the current StreamCut
-        String streamCutBarrierId = state.getBarrierIdForReader(readerId);
-        joinStreamCutBarrier(streamCutBarrierId, readerId, ownedSegmentsWithOffset);
+        String streamCutBarrierId = state.getBarrierIdForReader(readerId);  // Fetch the current StreamCutBarrier id.
+        if (streamCutBarrierId != null) {
+            joinStreamCutBarrier(streamCutBarrierId, readerId, ownedSegmentsWithOffset);
+        }
     }
     
     String getCheckpoint() throws ReinitializationRequiredException {
@@ -410,17 +411,15 @@ public class ReaderGroupStateManager {
     }
 
     private void joinStreamCutBarrier(String streamCutBarrierId, String readerId, Map<Segment, Long> ownedSegmentsWithOffset) {
-        if (streamCutBarrierId != null) {
-            AtomicBoolean reinitRequired = new AtomicBoolean(false);
-            sync.updateState((s, u) -> {
-                if (!s.isReaderOnline(readerId)) {
-                    reinitRequired.set(true);
-                } else {
-                    reinitRequired.set(false);
-                    u.add(new ReaderGroupState.JoinStreamCutBarrier(streamCutBarrierId, readerId, ownedSegmentsWithOffset));
-                }
-            });
-        }
+        AtomicBoolean reinitRequired = new AtomicBoolean(false);
+        sync.updateState((s, u) -> {
+            if (!s.isReaderOnline(readerId)) {
+                reinitRequired.set(true);
+            } else {
+                reinitRequired.set(false);
+                u.add(new ReaderGroupState.JoinStreamCutBarrier(streamCutBarrierId, readerId, ownedSegmentsWithOffset));
+            }
+        });
     }
 
     void checkpoint(String checkpointName, PositionInternal lastPosition) throws ReinitializationRequiredException {
