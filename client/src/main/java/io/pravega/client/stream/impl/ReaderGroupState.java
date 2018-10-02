@@ -19,6 +19,7 @@ import io.pravega.client.state.Revisioned;
 import io.pravega.client.state.Update;
 import io.pravega.client.stream.ReaderGroupConfig;
 import io.pravega.client.stream.Stream;
+import io.pravega.client.stream.StreamCut;
 import io.pravega.common.Exceptions;
 import io.pravega.common.ObjectBuilder;
 import io.pravega.common.io.serialization.RevisionDataInput;
@@ -49,6 +50,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Synchronized;
+import lombok.extern.slf4j.Slf4j;
 import lombok.val;
 
 /**
@@ -56,6 +58,7 @@ import lombok.val;
  * and each of the nested classes are state transitions that can occur.
  */
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Slf4j
 public class ReaderGroupState implements Revisioned {
 
     private static final long ASSUMED_LAG_MILLIS = 30000;
@@ -68,6 +71,8 @@ public class ReaderGroupState implements Revisioned {
     @VisibleForTesting
     @Getter(AccessLevel.PACKAGE)
     private final CheckpointState checkpointState;
+    @Getter(AccessLevel.PACKAGE)
+    private final StreamCutBarrierState streamCutBarrierState;
     @GuardedBy("$lock")
     private final Map<String, Long> distanceToTail;
     @GuardedBy("$lock")
@@ -88,6 +93,7 @@ public class ReaderGroupState implements Revisioned {
         this.config = config;
         this.revision = revision;
         this.checkpointState = new CheckpointState();
+        this.streamCutBarrierState = new StreamCutBarrierState();
         this.distanceToTail = new HashMap<>();
         this.futureSegments = new HashMap<>();
         this.assignedSegments = new HashMap<>();
@@ -282,7 +288,23 @@ public class ReaderGroupState implements Revisioned {
         sb.append(" }");
         return sb.toString();
     }
-    
+
+    @Synchronized
+    String getBarrierIdForReader(String readerName) {
+        return streamCutBarrierState.getBarrierIdForParty(readerName);
+    }
+
+    @Synchronized
+    public boolean isStreamCutBarrierComplete(UUID id) {
+        return streamCutBarrierState.isStreamCutBarrierComplete(id.toString());
+    }
+
+    @Synchronized
+    public Map<Stream, StreamCut> getPositionForStreamCutBarrier(String id) {
+        return streamCutBarrierState.getPositionsForCompletedStreamCutBarrier(id).entrySet().stream()
+                                    .collect(Collectors.toMap(Entry::getKey, o -> new StreamCutImpl(o.getKey(), o.getValue())));
+    }
+
     @Data
     @Builder
     @RequiredArgsConstructor
@@ -339,6 +361,7 @@ public class ReaderGroupState implements Revisioned {
 
         private final ReaderGroupConfig config;
         private final CheckpointState checkpointState;
+        private final StreamCutBarrierState streamCutBarrierState;
         private final Map<String, Long> distanceToTail;
         private final Map<Segment, Set<Long>> futureSegments;
         private final Map<String, Map<Segment, Long>> assignedSegments;
@@ -349,6 +372,7 @@ public class ReaderGroupState implements Revisioned {
             synchronized (state.$lock) {
                 config = state.config;
                 checkpointState = state.checkpointState.copy();
+                streamCutBarrierState = state.streamCutBarrierState.copy();
                 distanceToTail = new HashMap<>(state.distanceToTail);
                 futureSegments = new HashMap<>();
                 for (Entry<Segment, Set<Long>> entry : state.futureSegments.entrySet()) {
@@ -362,16 +386,16 @@ public class ReaderGroupState implements Revisioned {
                 endSegments = state.endSegments;
             }
         }
-        
+
         @Override
         public ReaderGroupState create(String scopedStreamName, Revision revision) {
-            return new ReaderGroupState(scopedStreamName, config, revision, checkpointState, distanceToTail,
+            return new ReaderGroupState(scopedStreamName, config, revision, checkpointState, streamCutBarrierState, distanceToTail,
                                         futureSegments, assignedSegments, unassignedSegments, endSegments);
         }
-        
+
         @VisibleForTesting
         static class CompactReaderGroupStateBuilder implements ObjectBuilder<CompactReaderGroupState> {
-            
+
         }
         
         static class CompactReaderGroupStateSerializer extends VersionedSerializer.WithBuilder<CompactReaderGroupState, CompactReaderGroupStateBuilder> {
@@ -962,7 +986,158 @@ public class ReaderGroupState implements Revisioned {
             }
         }
     }
-    
+
+    @Builder
+    @RequiredArgsConstructor
+    static class StartStreamCutBarrier extends ReaderGroupStateUpdate {
+        @Getter
+        private final String id;
+
+        StartStreamCutBarrier() {
+            this(UUID.randomUUID().toString());
+        }
+
+        /**
+         * @see ReaderGroupState.ReaderGroupStateUpdate#update(ReaderGroupState)
+         */
+        @Override
+        void update(ReaderGroupState state) {
+            log.info("==> create a new StreamCutBarrier update : {}", id);
+            state.streamCutBarrierState.beginNewStreamCutBarrier(id, state.getOnlineReaders(), state.getUnassignedSegments());
+        }
+
+        private static class StartStreamCutBarrierBuilder implements ObjectBuilder<StartStreamCutBarrier> {
+
+        }
+
+        private static class StartStreamCutBarrierSerializer
+                extends VersionedSerializer.WithBuilder<StartStreamCutBarrier, StartStreamCutBarrierBuilder> {
+            @Override
+            protected StartStreamCutBarrierBuilder newBuilder() {
+                return builder();
+            }
+
+            @Override
+            protected byte getWriteVersion() {
+                return 0;
+            }
+
+            @Override
+            protected void declareVersions() {
+                version(0).revision(0, this::write00, this::read00);
+            }
+
+            private void read00(RevisionDataInput in, StartStreamCutBarrierBuilder builder) throws IOException {
+                builder.id(in.readUTF());
+            }
+
+            private void write00(StartStreamCutBarrier object, RevisionDataOutput out) throws IOException {
+                out.writeUTF(object.id);
+            }
+        }
+    }
+
+    @Builder
+    @RequiredArgsConstructor
+    static class JoinStreamCutBarrier extends ReaderGroupStateUpdate {
+        private final String barrierId;
+        private final String party;
+        private final Map<Segment, Long> positions; //Immutable
+
+        /**
+         * @see ReaderGroupState.ReaderGroupStateUpdate#update(ReaderGroupState)
+         */
+        @Override
+        void update(ReaderGroupState state) {
+            state.streamCutBarrierState.joinStreamCutBarrier(barrierId, party, positions);
+
+            // Each reader updates the offsets of its assigned segments with the current positions for this checkpoint.
+            final Map<Segment, Long> readerPositions = state.assignedSegments.get(party);
+            Preconditions.checkState(readerPositions.size() == positions.size(), "Assigned segments should be same as the lastest position");
+            for (Entry<Segment, Long> entry : positions.entrySet()) {
+                readerPositions.replace(entry.getKey(), entry.getValue());
+            }
+        }
+
+        private static class JoinStreamCutBarrierBuilder implements ObjectBuilder<JoinStreamCutBarrier> {
+        }
+
+        private static class JoinStreamCutBarrierSerializer
+                extends VersionedSerializer.WithBuilder<JoinStreamCutBarrier, JoinStreamCutBarrierBuilder> {
+            @Override
+            protected JoinStreamCutBarrierBuilder newBuilder() {
+                return builder();
+            }
+
+            @Override
+            protected byte getWriteVersion() {
+                return 0;
+            }
+
+            @Override
+            protected void declareVersions() {
+                version(0).revision(0, this::write00, this::read00);
+            }
+
+            private void read00(RevisionDataInput in, JoinStreamCutBarrierBuilder builder) throws IOException {
+                builder.barrierId(in.readUTF());
+                builder.party(in.readUTF());
+                builder.positions(in.readMap(i -> Segment.fromScopedName(i.readUTF()), RevisionDataInput::readLong));
+            }
+
+            private void write00(JoinStreamCutBarrier object, RevisionDataOutput out) throws IOException {
+                out.writeUTF(object.barrierId);
+                out.writeUTF(object.party);
+                out.writeMap(object.positions, (o, segment) -> o.writeUTF(segment.getScopedName()), RevisionDataOutput::writeLong);
+            }
+        }
+    }
+
+    @Builder
+    @RequiredArgsConstructor
+    static class ClearStreamCutBarrierBefore extends ReaderGroupStateUpdate {
+        private final String id;
+
+        /**
+         * @see ReaderGroupState.ReaderGroupStateUpdate#update(ReaderGroupState)
+         */
+        @Override
+        void update(ReaderGroupState state) {
+            log.info("==> Clear Checkpoints before id : {}", id);
+            state.streamCutBarrierState.clearStreamCutBarrierBefore(id);
+        }
+
+        private static class ClearStreamCutBarrierBeforeBuilder implements ObjectBuilder<ClearStreamCutBarrierBefore> {
+
+        }
+
+        private static class ClearStreamCutBarrierBeforeSerializer
+                extends VersionedSerializer.WithBuilder<ClearStreamCutBarrierBefore, ClearStreamCutBarrierBeforeBuilder> {
+            @Override
+            protected ClearStreamCutBarrierBeforeBuilder newBuilder() {
+                return builder();
+            }
+
+            @Override
+            protected byte getWriteVersion() {
+                return 0;
+            }
+
+            @Override
+            protected void declareVersions() {
+                version(0).revision(0, this::write00, this::read00);
+            }
+
+            private void read00(RevisionDataInput in, ClearStreamCutBarrierBeforeBuilder builder) throws IOException {
+                builder.id(in.readUTF());
+            }
+
+            private void write00( ClearStreamCutBarrierBefore object, RevisionDataOutput out) throws IOException {
+                out.writeUTF(object.id);
+            }
+        }
+    }
+
     public static class ReaderGroupInitSerializer
             extends VersionedSerializer.MultiType<InitialUpdate<ReaderGroupState>> {
         @Override
@@ -987,7 +1162,10 @@ public class ReaderGroupState implements Revisioned {
              .serializer(SegmentCompleted.class, 7, new SegmentCompleted.SegmentCompletedSerializer())
              .serializer(CheckpointReader.class, 8, new CheckpointReader.CheckpointReaderSerializer())
              .serializer(CreateCheckpoint.class, 9, new CreateCheckpoint.CreateCheckpointSerializer())
-             .serializer(ClearCheckpointsBefore.class, 10, new ClearCheckpointsBefore.ClearCheckpointsBeforeSerializer());
+             .serializer(ClearCheckpointsBefore.class, 10, new ClearCheckpointsBefore.ClearCheckpointsBeforeSerializer())
+             .serializer(StartStreamCutBarrier.class, 11, new StartStreamCutBarrier.StartStreamCutBarrierSerializer())
+             .serializer(ClearStreamCutBarrierBefore.class, 12, new ClearStreamCutBarrierBefore.ClearStreamCutBarrierBeforeSerializer())
+             .serializer(JoinStreamCutBarrier.class, 13, new JoinStreamCutBarrier.JoinStreamCutBarrierSerializer());
         }
     }
     

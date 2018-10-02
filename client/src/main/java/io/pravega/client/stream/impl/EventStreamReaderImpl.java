@@ -139,10 +139,10 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
     /**
      * If the last call was a checkpoint updates the reader group state to indicate it has completed
      * and releases segments.
-     * 
+     *
      * If a checkpoint is pending its identifier is returned. (The checkpoint will be considered
      * complete when this is invoked again.)
-     * 
+     *
      * Otherwise it checks for any segments that need to be acquired.
      * 
      * Segments can only be released on the next read call following a checkpoint because this is
@@ -155,6 +155,8 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
     @GuardedBy("readers")
     private String updateGroupStateIfNeeded() throws ReinitializationRequiredException {
         try {
+            // join StreamCut Barrier and update state with latest positions.
+            groupState.checkAndJoinStreamCutBarrier(getPosition().getOwnedSegmentsWithOffsets());
             if (atCheckpoint != null) {
                 groupState.checkpoint(atCheckpoint, getPosition());
                 releaseSegmentsIfNeeded();

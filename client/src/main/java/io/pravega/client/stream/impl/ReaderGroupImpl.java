@@ -30,8 +30,10 @@ import io.pravega.client.stream.Serializer;
 import io.pravega.client.stream.Stream;
 import io.pravega.client.stream.StreamCut;
 import io.pravega.client.stream.impl.ReaderGroupState.ClearCheckpointsBefore;
+import io.pravega.client.stream.impl.ReaderGroupState.ClearStreamCutBarrierBefore;
 import io.pravega.client.stream.impl.ReaderGroupState.CreateCheckpoint;
 import io.pravega.client.stream.impl.ReaderGroupState.ReaderGroupStateInit;
+import io.pravega.client.stream.impl.ReaderGroupState.StartStreamCutBarrier;
 import io.pravega.client.stream.notifications.EndOfDataNotification;
 import io.pravega.client.stream.notifications.NotificationSystem;
 import io.pravega.client.stream.notifications.NotifierFactory;
@@ -48,6 +50,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -304,6 +307,36 @@ public class ReaderGroupImpl implements ReaderGroup, ReaderGroupMetrics {
         }
 
         return cuts;
+    }
+
+    @Override
+    public CompletableFuture<Map<Stream, StreamCut>> getCurrentStreamCut(ScheduledExecutorService backgroundExecutor) {
+        UUID id = UUID.randomUUID();
+        synchronizer.updateStateUnconditionally(new StartStreamCutBarrier(id.toString()));
+        AtomicBoolean fetchStreamCutPending = new AtomicBoolean(true);
+
+        return Futures.loop(fetchStreamCutPending::get, () -> {
+            return Futures.delayedTask(() -> {
+                synchronizer.fetchUpdates();
+                fetchStreamCutPending.set(!synchronizer.getState().isStreamCutBarrierComplete(id));
+                if (fetchStreamCutPending.get()) {
+                    log.debug("Waiting on fetch StreamCut: {} currentState is: {}", id, synchronizer.getState());
+                }
+                return null;
+            }, Duration.ofMillis(500), backgroundExecutor);
+        }, backgroundExecutor)
+                      .thenApply(v -> completeFetchStreamCut(id.toString()));
+    }
+
+    @SneakyThrows(FetchStreamCutFailedException.class)
+    private Map<Stream, StreamCut> completeFetchStreamCut(String id) {
+        ReaderGroupState state = synchronizer.getState();
+        Map<Stream, StreamCut> map = state.getPositionForStreamCutBarrier(id);
+        synchronizer.updateStateUnconditionally(new ClearStreamCutBarrierBefore(id));
+        if (map == null) {
+            throw new FetchStreamCutFailedException("StreamCut data was cleared before results could be read.");
+        }
+        return map;
     }
 
     @Override

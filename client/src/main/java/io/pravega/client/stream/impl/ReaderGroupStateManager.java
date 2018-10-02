@@ -371,6 +371,15 @@ public class ReaderGroupStateManager {
     static Duration calculateAcquireTime(String readerId, ReaderGroupState state) {
         return TIME_UNIT.multipliedBy(state.getNumberOfReaders() - state.getRanking(readerId));
     }
+
+    void checkAndJoinStreamCutBarrier(Map<Segment, Long> ownedSegmentsWithOffset) throws ReinitializationRequiredException {
+        fetchUpdatesIfNeeded();
+        ReaderGroupState state = sync.getState();
+        String streamCutBarrierId = state.getBarrierIdForReader(readerId);  // Fetch the current StreamCutBarrier id.
+        if (streamCutBarrierId != null) {
+            joinStreamCutBarrier(streamCutBarrierId, readerId, ownedSegmentsWithOffset);
+        }
+    }
     
     String getCheckpoint() throws ReinitializationRequiredException {
         fetchUpdatesIfNeeded();
@@ -387,6 +396,7 @@ public class ReaderGroupStateManager {
         if (automaticCpInterval <= 0 || checkpointTimer.hasRemaining() || state.hasOngoingCheckpoint()) {
             return null;
         }
+        // This is used to generate automatic check points ??
         sync.updateState((s, u) -> {
             if (!s.hasOngoingCheckpoint()) {
                 CreateCheckpoint newCp = new CreateCheckpoint();
@@ -398,7 +408,19 @@ public class ReaderGroupStateManager {
         checkpointTimer.reset(Duration.ofMillis(automaticCpInterval));
         return state.getCheckpointForReader(readerId);
     }
-    
+
+    private void joinStreamCutBarrier(String streamCutBarrierId, String readerId, Map<Segment, Long> ownedSegmentsWithOffset) {
+        AtomicBoolean reinitRequired = new AtomicBoolean(false);
+        sync.updateState((s, u) -> {
+            if (!s.isReaderOnline(readerId)) {
+                reinitRequired.set(true);
+            } else {
+                reinitRequired.set(false);
+                u.add(new ReaderGroupState.JoinStreamCutBarrier(streamCutBarrierId, readerId, ownedSegmentsWithOffset));
+            }
+        });
+    }
+
     void checkpoint(String checkpointName, PositionInternal lastPosition) throws ReinitializationRequiredException {
         AtomicBoolean reinitRequired = new AtomicBoolean(false);
         sync.updateState((state, updates) -> {
