@@ -146,7 +146,7 @@ public interface ReaderGroup extends ReaderGroupNotificationListener, AutoClosea
     Map<Stream, StreamCut> getStreamCuts();
 
     /**
-     * Fetch the latest StreamCut after co-ordinating with all the readers using {@link io.pravega.client.state.StateSynchronizer}
+     * Fetch the latest StreamCut after co-ordinating with all the readers using {@link io.pravega.client.state.StateSynchronizer}.
      *
      * @param backgroundExecutor A thread pool that will be used to poll if the positions from all the readers have been
      *                           fetched.
