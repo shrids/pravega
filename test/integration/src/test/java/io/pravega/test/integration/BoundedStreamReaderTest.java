@@ -327,7 +327,8 @@ public class BoundedStreamReaderTest {
         Map<Segment, Long> segmentMap = streamCut.asImpl().getPositions();
         assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(0, 0))));
         assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(3, 1))));
-
+        // Segment 0 -> offset 0;
+        // Segment 1 -> offset 30L
         reader1.close();
         reader2.close();
         readerGroup.close();
@@ -352,9 +353,9 @@ public class BoundedStreamReaderTest {
         log.info("=======================>");
         if (reader3Event.equals(getEventData.apply(0))) {
             // reader3 is the one reading from S0
-            // invoking read here should trigger readers from S2
             String event = reader3.readNextEvent(15000).getEvent();
             assertEquals(getEventData.apply(0), event);
+            // invoking read here should trigger readers from S2
             event = reader3.readNextEvent(30000).getEvent();
             assertEquals(getEventData.apply(2), event); // this fails.
 
