@@ -250,7 +250,7 @@ public class BoundedStreamReaderTest {
         Assert.assertNull("Null is expected", reader2.readNextEvent(2000).getEvent());
     }
 
-    @Test(timeout = 60000)
+    @Test//(timeout = 60000)
     public void testInvalidStreamCutWithManualScale() throws Exception {
         createScope(SCOPE);
         createStream(STREAM1, 2);
@@ -262,11 +262,11 @@ public class BoundedStreamReaderTest {
                                                                             EventWriterConfig.builder().build());
         //Prep the stream with data.
         //1.Write 2 events with event size of 30 in S0
-        writer1.writeEvent(keyGenerator.apply("0.4"), getEventData.apply(1)).get();
-        writer1.writeEvent(keyGenerator.apply("0.4"), getEventData.apply(1)).get();
+        writer1.writeEvent(keyGenerator.apply("0.4"), getEventData.apply(0)).get();
+        writer1.writeEvent(keyGenerator.apply("0.4"), getEventData.apply(0)).get();
         //2. Write 2 events to S1.
-        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(2)).get();
-        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(2)).get();
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(1)).get();
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(1)).get();
 
         //2.Scale stream
         Map<Double, Double> newKeyRanges = new HashMap<>();
@@ -275,11 +275,13 @@ public class BoundedStreamReaderTest {
         scaleStream(STREAM1, newKeyRanges);
 
         //3.Write 2 events to Segment S2 [0.0, 0.6)
-        writer1.writeEvent(keyGenerator.apply("0.3"), getEventData.apply(3)).get();
-        writer1.writeEvent(keyGenerator.apply("0.3"), getEventData.apply(3)).get();
+        writer1.writeEvent(keyGenerator.apply("0.3"), getEventData.apply(2)).get();
+        writer1.writeEvent(keyGenerator.apply("0.3"), getEventData.apply(2)).get();
+        writer1.writeEvent(keyGenerator.apply("0.3"), getEventData.apply(2)).get();
         //4.Write 2 events to Segment S3 [0.6, 1.0)
-        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(4)).get();
-        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(4)).get();
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(3)).get();
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(3)).get();
+        writer1.writeEvent(keyGenerator.apply("0.7"), getEventData.apply(3)).get();
 
         @Cleanup
         ReaderGroupManager groupManager = ReaderGroupManager.withScope(SCOPE, controllerUri);
@@ -304,25 +306,69 @@ public class BoundedStreamReaderTest {
         assertTrue(event4Reader1 != null);
         assertTrue(event4Reader2 != null);
 
-        //6. Continue reading on the reader where event data 2 is observed.
-        if (event4Reader1.equals(getEventData.apply(2))) {
-            assertEquals(getEventData.apply(2), reader1.readNextEvent(10000).getEvent());
+        //6. Continue reading on the reader where event data 1 is observed.
+        if (event4Reader1.equals(getEventData.apply(1))) {
+            assertEquals(getEventData.apply(1), reader1.readNextEvent(10000).getEvent());
             EventRead<String> stringEventRead = reader1.readNextEvent(10000);
-            assertEquals(getEventData.apply(4), stringEventRead.getEvent());
+            assertEquals(getEventData.apply(3), stringEventRead.getEvent());
             reader1.close();
             readerGroup.readerOffline("readerId1", stringEventRead.getPosition());
 
         } else {
-            assertEquals(getEventData.apply(2), reader2.readNextEvent(10000).getEvent());
+            assertEquals(getEventData.apply(1), reader2.readNextEvent(10000).getEvent());
             EventRead<String> stringEventRead = reader2.readNextEvent(10000);
-            assertEquals(getEventData.apply(4), stringEventRead.getEvent());
+            assertEquals(getEventData.apply(3), stringEventRead.getEvent());
             reader2.close();
             readerGroup.readerOffline("readerId2", stringEventRead.getPosition());
         }
 
-        Map<Segment, Long> segmentMap = readerGroup.getStreamCuts().get(Stream.of(SCOPE, STREAM1)).asImpl().getPositions();
+        StreamCut streamCut = readerGroup.getStreamCuts().get(Stream.of(SCOPE, STREAM1));
+
+        Map<Segment, Long> segmentMap = streamCut.asImpl().getPositions();
         assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(0, 0))));
         assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(3, 1))));
+
+        reader1.close();
+        reader2.close();
+        readerGroup.close();
+
+        ReaderGroupConfig readerGroupCfg2 = ReaderGroupConfig.builder().disableAutomaticCheckpoints()
+                                                             .stream(Stream.of(SCOPE, STREAM1), streamCut)
+                                                             .build();
+        groupManager.createReaderGroup("group2", readerGroupCfg2);
+        ReaderGroup readerGroup2 = groupManager.getReaderGroup("group2");
+
+        //Create two readers
+        @Cleanup
+        EventStreamReader<String> reader3 = clientFactory.createReader("readerId3", "group2", serializer,
+                                                                       ReaderConfig.builder().build());
+        @Cleanup
+        EventStreamReader<String> reader4 = clientFactory.createReader("readerId4", "group2", serializer,
+                                                                       ReaderConfig.builder().build());
+
+        String reader3Event = reader3.readNextEvent(15000).getEvent();
+        String reader4Event = reader4.readNextEvent(15000).getEvent();
+
+        log.info("=======================>");
+        if (reader3Event.equals(getEventData.apply(0))) {
+            // reader3 is the one reading from S0
+            // invoking read here should trigger readers from S2
+            String event = reader3.readNextEvent(15000).getEvent();
+            assertEquals(getEventData.apply(0), event);
+            event = reader3.readNextEvent(30000).getEvent();
+            assertEquals(getEventData.apply(2), event); // this fails.
+
+        } else {
+            // reader4 is the one reading from S0
+            // invoking read here should trigger readers from S2
+            String event = reader4.readNextEvent(15000).getEvent();
+            assertEquals(getEventData.apply(0), event);
+            event = reader4.readNextEvent(15000).getEvent();
+            assertEquals(getEventData.apply(2), event); // this fails.
+        }
+
+
+
     }
 
     @Test(timeout = 60000)
