@@ -13,6 +13,7 @@ import com.google.common.collect.ImmutableMap;
 import io.pravega.client.ClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.segment.impl.Segment;
+import io.pravega.client.stream.Checkpoint;
 import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
 import io.pravega.client.stream.EventStreamWriter;
@@ -30,12 +31,14 @@ import io.pravega.client.stream.TruncatedDataException;
 import io.pravega.client.stream.impl.Controller;
 import io.pravega.client.stream.impl.JavaSerializer;
 import io.pravega.client.stream.impl.StreamCutImpl;
+import io.pravega.common.concurrent.Futures;
 import io.pravega.common.hash.HashHelper;
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
 import io.pravega.segmentstore.server.host.handler.PravegaConnectionListener;
 import io.pravega.segmentstore.server.store.ServiceBuilder;
 import io.pravega.segmentstore.server.store.ServiceBuilderConfig;
 import io.pravega.shared.segment.StreamSegmentNameUtils;
+import io.pravega.test.common.InlineExecutor;
 import io.pravega.test.common.TestUtils;
 import io.pravega.test.common.TestingServerStarter;
 import io.pravega.test.integration.demo.ControllerWrapper;
@@ -47,9 +50,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -57,6 +62,7 @@ import java.util.stream.Collectors;
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.test.TestingServer;
+import org.apache.hadoop.yarn.webapp.hamlet.HamletSpec;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -288,6 +294,7 @@ public class BoundedStreamReaderTest {
 
         ReaderGroupConfig readerGroupCfg1 = ReaderGroupConfig.builder().disableAutomaticCheckpoints()
                                                              .stream(Stream.of(SCOPE, STREAM1))
+                                                             .groupRefreshTimeMillis(1000)
                                                              .build();
         groupManager.createReaderGroup("group", readerGroupCfg1);
         ReaderGroup readerGroup = groupManager.getReaderGroup("group");
@@ -300,41 +307,59 @@ public class BoundedStreamReaderTest {
         EventStreamReader<String> reader2 = clientFactory.createReader("readerId2", "group", serializer,
                                                                        ReaderConfig.builder().build());
 
-        //5. Read 1 event on both the readers.
+        //5. Read 1 event on both the readers. )
         String event4Reader1 = reader1.readNextEvent(10000).getEvent();
         String event4Reader2 = reader2.readNextEvent(10000).getEvent();
+        // We are at S0/offset 30L and S1/offset 30L
         assertTrue(event4Reader1 != null);
         assertTrue(event4Reader2 != null);
 
-        //6. Continue reading on the reader where event data 1 is observed.
+        //6. Continue reading on the reader reading from Segment 1.
         if (event4Reader1.equals(getEventData.apply(1))) {
             assertEquals(getEventData.apply(1), reader1.readNextEvent(10000).getEvent());
+            //The next read should read from Segment 3 as we have reached end of Segment 1
             EventRead<String> stringEventRead = reader1.readNextEvent(10000);
-            assertEquals(getEventData.apply(3), stringEventRead.getEvent());
-            reader1.close();
-            readerGroup.readerOffline("readerId1", stringEventRead.getPosition());
-
+            assertEquals(getEventData.apply(3), stringEventRead.getEvent()); // we have read until S3/ offset 30L
         } else {
             assertEquals(getEventData.apply(1), reader2.readNextEvent(10000).getEvent());
+            //The next read should read from Segment 3 as we have reached end of Segment 1
             EventRead<String> stringEventRead = reader2.readNextEvent(10000);
-            assertEquals(getEventData.apply(3), stringEventRead.getEvent());
-            reader2.close();
-            readerGroup.readerOffline("readerId2", stringEventRead.getPosition());
+            assertEquals(getEventData.apply(3), stringEventRead.getEvent()); // we have read until S3/ offset 30L
         }
 
+        //7. Initiate a Checkpoint.
+
+        @Cleanup("shutdownNow")
+        InlineExecutor exec = new InlineExecutor();
+        CompletableFuture<Checkpoint> checkpoint = readerGroup.initiateCheckpoint("chk1", executor);
+        TimeUnit.SECONDS.sleep(2); // wait until group refresh timeout.
+        assertTrue(reader1.readNextEvent(15000).isCheckpoint());
+        assertTrue(reader2.readNextEvent(15000).isCheckpoint());
+        event4Reader1 = reader1.readNextEvent(15000).getEvent();
+        event4Reader2 = reader2.readNextEvent(15000).getEvent();
+        TimeUnit.SECONDS.sleep(1);
+        assertTrue(Futures.isSuccessful(checkpoint));
+
+        //8. Verify checkpoint , the checkpoint now points to S0/30L and S3/30L
+        StreamCut sc = checkpoint.get().asImpl().getPositions().get(Stream.of(SCOPE, STREAM1));
+        Map<Segment, Long> positions = sc.asImpl().getPositions();
+        assertEquals(2, positions.size());
+        assertEquals(30L, positions.get(new Segment(SCOPE, STREAM1, computeSegmentId(0, 0))).longValue());
+        assertEquals(30L, positions.get(new Segment(SCOPE, STREAM1, computeSegmentId(3, 1))).longValue());
         StreamCut streamCut = readerGroup.getStreamCuts().get(Stream.of(SCOPE, STREAM1));
 
-        Map<Segment, Long> segmentMap = streamCut.asImpl().getPositions();
-        assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(0, 0))));
-        assertTrue(segmentMap.containsKey(new Segment(SCOPE, STREAM1, computeSegmentId(3, 1))));
-        // Segment 0 -> offset 0;
-        // Segment 1 -> offset 30L
+        //9. Obtain StreamCuts via RG.getStreamCuts() api.
+        StreamCut scViaGetStreamCutsAPI = readerGroup.getStreamCuts().get(Stream.of(SCOPE, STREAM1));
+        // Verify both the streamCuts are the same.
+        assertEquals(scViaGetStreamCutsAPI, sc);
+
         reader1.close();
         reader2.close();
         readerGroup.close();
 
         ReaderGroupConfig readerGroupCfg2 = ReaderGroupConfig.builder().disableAutomaticCheckpoints()
-                                                             .stream(Stream.of(SCOPE, STREAM1), streamCut)
+                                                             .stream(Stream.of(SCOPE, STREAM1))
+                                                             .startFromCheckpoint(checkpoint.get()) // similar to RG.resetToCheckpoint()
                                                              .build();
         groupManager.createReaderGroup("group2", readerGroupCfg2);
         ReaderGroup readerGroup2 = groupManager.getReaderGroup("group2");
@@ -350,23 +375,18 @@ public class BoundedStreamReaderTest {
         String reader3Event = reader3.readNextEvent(15000).getEvent();
         String reader4Event = reader4.readNextEvent(15000).getEvent();
 
-        log.info("=======================>");
         if (reader3Event.equals(getEventData.apply(0))) {
             // reader3 is the one reading from S0
-            String event = reader3.readNextEvent(15000).getEvent();
-            assertEquals(getEventData.apply(0), event);
             // invoking read here should trigger readers from S2
-            event = reader3.readNextEvent(30000).getEvent();
-            assertEquals(getEventData.apply(2), event); // this fails.
-
+            String event = reader3.readNextEvent(30000).getEvent();
+            assertEquals(getEventData.apply(2), event); // this fails as it is null.
         } else {
             // reader4 is the one reading from S0
             // invoking read here should trigger readers from S2
             String event = reader4.readNextEvent(15000).getEvent();
-            assertEquals(getEventData.apply(0), event);
-            event = reader4.readNextEvent(15000).getEvent();
-            assertEquals(getEventData.apply(2), event); // this fails.
+            assertEquals(getEventData.apply(2), event); // this fails as it is null.
         }
+        // Segment 2 is never read since the predecessor Segment 1 was never read in the new ReaderGroup.
 
 
 
