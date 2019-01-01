@@ -10,6 +10,7 @@
 package io.pravega.segmentstore.server.host.handler;
 
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
+import io.pravega.segmentstore.contracts.tables.TableStore;
 import io.pravega.shared.protocol.netty.WireCommands;
 import org.junit.After;
 import org.junit.Before;
@@ -26,8 +27,9 @@ public class PravegaRequestProcessorAuthFailedTest {
     @Before
     public void setUp() throws Exception {
         StreamSegmentStore store = mock(StreamSegmentStore.class);
+        TableStore tableStore = mock(TableStore.class);
         connection = mock(ServerConnection.class);
-        processor = new PravegaRequestProcessor(store, connection, null, (resource, token, expectedLevel) -> false, false);
+        processor = new PravegaRequestProcessor(store, tableStore, connection, null, (resource, token, expectedLevel) -> false, false);
     }
 
     @After
@@ -63,7 +65,7 @@ public class PravegaRequestProcessorAuthFailedTest {
 
     @Test
     public void createSegment() {
-        processor.createSegment(new WireCommands.CreateSegment(100L, "segment", (byte) 0, 0, "token"));
+        processor.createSegment(new WireCommands.CreateSegment(100L, "segment", (byte) 0, 0, "token", false));
         verify(connection).send(new WireCommands.AuthTokenCheckFailed(100L, ""));
     }
 

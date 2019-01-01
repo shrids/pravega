@@ -34,6 +34,7 @@ import io.pravega.segmentstore.contracts.StreamSegmentNotExistsException;
 import io.pravega.segmentstore.contracts.StreamSegmentSealedException;
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
 import io.pravega.segmentstore.contracts.StreamSegmentTruncatedException;
+import io.pravega.segmentstore.contracts.tables.TableStore;
 import io.pravega.segmentstore.server.host.delegationtoken.DelegationTokenVerifier;
 import io.pravega.segmentstore.server.host.delegationtoken.PassingTokenVerifier;
 import io.pravega.segmentstore.server.host.stat.SegmentStatsRecorder;
@@ -81,6 +82,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 import lombok.AccessLevel;
@@ -128,6 +130,7 @@ public class PravegaRequestProcessor extends FailingRequestProcessor implements 
     private final OpStatsLogger createStreamSegment = STATS_LOGGER.createStats(SEGMENT_CREATE_LATENCY);
     private final OpStatsLogger readStreamSegment = STATS_LOGGER.createStats(SEGMENT_READ_LATENCY);
     private final StreamSegmentStore segmentStore;
+    private final TableStore tableStore;
     private final ServerConnection connection;
     private final SegmentStatsRecorder statsRecorder;
     private final DelegationTokenVerifier tokenVerifier;
@@ -141,11 +144,12 @@ public class PravegaRequestProcessor extends FailingRequestProcessor implements 
      * Creates a new instance of the PravegaRequestProcessor class with no Metrics StatsRecorder.
      *
      * @param segmentStore The StreamSegmentStore to attach to (and issue requests to).
+     * @param tableStore The TableStore to attach to (and issue requests to).
      * @param connection   The ServerConnection to attach to (and send responses to).
      */
     @VisibleForTesting
-    public PravegaRequestProcessor(StreamSegmentStore segmentStore, ServerConnection connection) {
-        this(segmentStore, connection, null, new PassingTokenVerifier(), false);
+    public PravegaRequestProcessor(StreamSegmentStore segmentStore, TableStore tableStore, ServerConnection connection) {
+        this(segmentStore, tableStore, connection, null, new PassingTokenVerifier(), false);
     }
 
     /**
@@ -157,9 +161,10 @@ public class PravegaRequestProcessor extends FailingRequestProcessor implements 
      * @param tokenVerifier  Verifier class that verifies delegation token.
      * @param replyWithStackTraceOnError Whether client replies upon failed requests contain server-side stack traces or not.
      */
-    PravegaRequestProcessor(StreamSegmentStore segmentStore, ServerConnection connection, SegmentStatsRecorder statsRecorder,
-                            DelegationTokenVerifier tokenVerifier, boolean replyWithStackTraceOnError) {
+    PravegaRequestProcessor(StreamSegmentStore segmentStore, TableStore tableStore, ServerConnection connection,
+                            SegmentStatsRecorder statsRecorder, DelegationTokenVerifier tokenVerifier, boolean replyWithStackTraceOnError) {
         this.segmentStore = Preconditions.checkNotNull(segmentStore, "segmentStore");
+        this.tableStore = Preconditions.checkNotNull(tableStore, "tableStore");
         this.connection = Preconditions.checkNotNull(connection, "connection");
         this.tokenVerifier = Preconditions.checkNotNull(tokenVerifier, "tokenVerifier");
         this.statsRecorder = statsRecorder;
@@ -405,18 +410,28 @@ public class PravegaRequestProcessor extends FailingRequestProcessor implements 
         Timer timer = new Timer();
         final String operation = "createSegment";
 
-        Collection<AttributeUpdate> attributes = Arrays.asList(
-                new AttributeUpdate(SCALE_POLICY_TYPE, AttributeUpdateType.Replace, ((Byte) createStreamSegment.getScaleType()).longValue()),
-                new AttributeUpdate(SCALE_POLICY_RATE, AttributeUpdateType.Replace, ((Integer) createStreamSegment.getTargetRate()).longValue()),
-                new AttributeUpdate(CREATION_TIME, AttributeUpdateType.None, System.currentTimeMillis())
-        );
-
-       if (!verifyToken(createStreamSegment.getSegment(), createStreamSegment.getRequestId(), createStreamSegment.getDelegationToken(), operation)) {
+        if (!verifyToken(createStreamSegment.getSegment(), createStreamSegment.getRequestId(), createStreamSegment.getDelegationToken(), operation)) {
             return;
-       }
+        }
 
-       log.info(createStreamSegment.getRequestId(), "Creating stream segment {}.", createStreamSegment);
-       segmentStore.createStreamSegment(createStreamSegment.getSegment(), attributes, TIMEOUT)
+        final CompletableFuture<Void> createSegmentFuture;
+
+        // create a segment.
+        if (createStreamSegment.isTableStoreSegment()) {
+            log.info(createStreamSegment.getRequestId(), "Creating tableStore segment {}.", createStreamSegment);
+            createSegmentFuture = tableStore.createSegment(createStreamSegment.getSegment(), TIMEOUT);
+        } else {
+
+            Collection<AttributeUpdate> attributes = Arrays.asList(
+                    new AttributeUpdate(SCALE_POLICY_TYPE, AttributeUpdateType.Replace, ((Byte) createStreamSegment.getScaleType()).longValue()),
+                    new AttributeUpdate(SCALE_POLICY_RATE, AttributeUpdateType.Replace, ((Integer) createStreamSegment.getTargetRate()).longValue()),
+                    new AttributeUpdate(CREATION_TIME, AttributeUpdateType.None, System.currentTimeMillis())
+            );
+
+            log.info(createStreamSegment.getRequestId(), "Creating stream segment {}.", createStreamSegment);
+            createSegmentFuture = segmentStore.createStreamSegment(createStreamSegment.getSegment(), attributes, TIMEOUT);
+        }
+        createSegmentFuture
                 .thenAccept(v -> {
                     this.createStreamSegment.reportSuccessEvent(timer.getElapsed());
                     connection.send(new SegmentCreated(createStreamSegment.getRequestId(), createStreamSegment.getSegment()));
@@ -425,7 +440,7 @@ public class PravegaRequestProcessor extends FailingRequestProcessor implements 
                     if (e == null) {
                         if (statsRecorder != null) {
                             statsRecorder.createSegment(createStreamSegment.getSegment(),
-                                    createStreamSegment.getScaleType(), createStreamSegment.getTargetRate());
+                                                        createStreamSegment.getScaleType(), createStreamSegment.getTargetRate());
                         }
                     } else {
                         this.createStreamSegment.reportFailEvent(timer.getElapsed());

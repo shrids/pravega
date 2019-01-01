@@ -211,7 +211,7 @@ public class MockController implements Controller {
                 result.completeExceptionally(new AuthenticationException(authTokenCheckFailed.toString()));
             }
         };
-        CreateSegment command = new WireCommands.CreateSegment(idGenerator.get(), name, WireCommands.CreateSegment.NO_SCALE, 0, "");
+        CreateSegment command = new WireCommands.CreateSegment(idGenerator.get(), name, WireCommands.CreateSegment.NO_SCALE, 0, "", false);
         sendRequestOverNewConnection(command, replyProcessor, result);
         return getAndHandleExceptions(result, RuntimeException::new);
     }
@@ -413,7 +413,7 @@ public class MockController implements Controller {
         };
         String transactionName = StreamSegmentNameUtils.getTransactionNameFromId(segment.getScopedName(), txId);
         sendRequestOverNewConnection(new CreateSegment(idGenerator.get(), transactionName, WireCommands.CreateSegment.NO_SCALE,
-                0, ""), replyProcessor, result);
+                0, "", false), replyProcessor, result);
         return result;
     }
 
