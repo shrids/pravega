@@ -113,7 +113,7 @@ public class SegmentHelper {
         Pair<Byte, Integer> extracted = extractFromPolicy(policy);
 
         WireCommands.CreateSegment request = new WireCommands.CreateSegment(requestId, qualifiedStreamSegmentName,
-                extracted.getLeft(), extracted.getRight(), controllerToken);
+                extracted.getLeft(), extracted.getRight(), controllerToken, false);
         sendRequestAsync(request, replyProcessor, result, clientCF, ModelHelper.encode(uri));
         return result;
     }
@@ -368,7 +368,7 @@ public class SegmentHelper {
         };
 
         WireCommands.CreateSegment request = new WireCommands.CreateSegment(idGenerator.get(), transactionName,
-                WireCommands.CreateSegment.NO_SCALE, 0, delegationToken);
+                WireCommands.CreateSegment.NO_SCALE, 0, delegationToken, false);
         sendRequestAsync(request, replyProcessor, result, clientCF, ModelHelper.encode(uri));
         return result;
     }

@@ -73,7 +73,7 @@ public class TransactionTest {
         String routingKey = "RoutingKey";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager("scope", endpoint, port);
@@ -138,7 +138,7 @@ public class TransactionTest {
         String routingKey = "RoutingKey";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager("scope", endpoint, port);
@@ -168,7 +168,7 @@ public class TransactionTest {
         String routingKey = "RoutingKey";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager("scope", endpoint, port);

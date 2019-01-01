@@ -70,7 +70,7 @@ public class EndToEndStatsTest {
 
         statsRecorder = new TestStatsRecorder();
 
-        server = new PravegaConnectionListener(false, "localhost", servicePort, store,
+        server = new PravegaConnectionListener(false, "localhost", servicePort, store, serviceBuilder.createTableStoreService(),
                 statsRecorder, null, null, null, true);
         server.startListening();
 

@@ -112,7 +112,7 @@ public class ControllerBootstrapTest {
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
 
-        server = new PravegaConnectionListener(false, servicePort, store);
+        server = new PravegaConnectionListener(false, servicePort, store, serviceBuilder.createTableStoreService());
         server.startListening();
 
         // Ensure that create stream succeeds.

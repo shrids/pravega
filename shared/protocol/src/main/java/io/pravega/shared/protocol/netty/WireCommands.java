@@ -44,7 +44,7 @@ import static io.netty.buffer.Unpooled.wrappedBuffer;
  * Incompatible changes should instead create a new WireCommand object.
  */
 public final class WireCommands {
-    public static final int WIRE_VERSION = 6;
+    public static final int WIRE_VERSION = 7;
     public static final int OLDEST_COMPATIBLE_VERSION = 5;
     public static final int TYPE_SIZE = 4;
     public static final int TYPE_PLUS_LENGTH_SIZE = 8;
@@ -964,6 +964,7 @@ public final class WireCommands {
         final byte scaleType;
         final int targetRate;
         final String delegationToken;
+        final boolean isTableStoreSegment;
 
         @Override
         public void process(RequestProcessor cp) {
@@ -977,16 +978,18 @@ public final class WireCommands {
             out.writeInt(targetRate);
             out.writeByte(scaleType);
             out.writeUTF(delegationToken == null ? "" : delegationToken);
+            out.writeBoolean(isTableStoreSegment);
         }
 
-        public static WireCommand readFrom(DataInput in, int length) throws IOException {
+        public static WireCommand readFrom(ByteBufInputStream in, int length) throws IOException {
             long requestId = in.readLong();
             String segment = in.readUTF();
             int desiredRate = in.readInt();
             byte scaleType = in.readByte();
             String delegationToken = in.readUTF();
+            boolean isTableStoreSegment = (in.available() > 0) && in.readBoolean();
 
-            return new CreateSegment(requestId, segment, scaleType, desiredRate, delegationToken);
+            return new CreateSegment(requestId, segment, scaleType, desiredRate, delegationToken, isTableStoreSegment);
         }
     }
 

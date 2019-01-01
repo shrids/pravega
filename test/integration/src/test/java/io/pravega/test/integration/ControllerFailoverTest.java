@@ -48,7 +48,7 @@ public class ControllerFailoverTest {
         ServiceBuilder serviceBuilder = ServiceBuilder.newInMemoryBuilder(ServiceBuilderConfig.getDefaultConfig());
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
-        server = new PravegaConnectionListener(false, servicePort, store);
+        server = new PravegaConnectionListener(false, servicePort, store, serviceBuilder.createTableStoreService());
         server.startListening();
     }
 

@@ -142,7 +142,7 @@ public class ReadTest {
 
         fillStoreForSegment(segmentName, clientId, data, entries, segmentStore);
         @Cleanup
-        EmbeddedChannel channel = AppendTest.createChannel(segmentStore);
+        EmbeddedChannel channel = AppendTest.createChannel(segmentStore, serviceBuilder.createTableStoreService());
 
         ByteBuffer actual = ByteBuffer.allocate(entries * data.length);
         while (actual.position() < actual.capacity()) {
@@ -179,7 +179,7 @@ public class ReadTest {
         String testString = "Hello world\n";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         ConnectionFactory clientCF = new ConnectionFactoryImpl(ClientConfig.builder().build());
         Controller controller = new MockController(endpoint, port, clientCF);
@@ -221,7 +221,7 @@ public class ReadTest {
         byte[] testString = "Hello world\n".getBytes();
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         ConnectionFactory clientCF = new ConnectionFactoryImpl(ClientConfig.builder().build());
         Controller controller = new MockController(endpoint, port, clientCF);
@@ -262,7 +262,7 @@ public class ReadTest {
         String scope = "Scope1";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager(scope, endpoint, port);
@@ -295,7 +295,7 @@ public class ReadTest {
         String scope = "Scope1";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager(scope, endpoint, port);

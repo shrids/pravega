@@ -116,7 +116,7 @@ public class EventProcessorTest {
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
         int servicePort = TestUtils.getAvailableListenPort();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, servicePort, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, servicePort, store, serviceBuilder.createTableStoreService());
         server.startListening();
         int controllerPort = TestUtils.getAvailableListenPort();
         @Cleanup

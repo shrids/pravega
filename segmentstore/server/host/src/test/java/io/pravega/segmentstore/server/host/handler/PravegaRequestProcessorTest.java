@@ -19,6 +19,7 @@ import io.pravega.segmentstore.contracts.StreamSegmentInformation;
 import io.pravega.segmentstore.contracts.StreamSegmentMergedException;
 import io.pravega.segmentstore.contracts.StreamSegmentNotExistsException;
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
+import io.pravega.segmentstore.contracts.tables.TableStore;
 import io.pravega.segmentstore.server.mocks.SynchronousStreamSegmentStore;
 import io.pravega.segmentstore.server.reading.ReadResultEntryBase;
 import io.pravega.segmentstore.server.store.ServiceBuilder;
@@ -131,8 +132,9 @@ public class PravegaRequestProcessorTest {
         int readLength = 1000;
 
         StreamSegmentStore store = mock(StreamSegmentStore.class);
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         TestReadResultEntry entry1 = new TestReadResultEntry(ReadResultEntryType.Cache, 0, readLength);
         entry1.complete(new ReadResultEntryContents(new ByteArrayInputStream(data), data.length));
@@ -163,8 +165,9 @@ public class PravegaRequestProcessorTest {
         int readLength = 1000;
 
         StreamSegmentStore store = mock(StreamSegmentStore.class);
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         TestReadResultEntry entry1 = new TestReadResultEntry(ReadResultEntryType.EndOfStreamSegment, 0, readLength);
 
@@ -189,8 +192,9 @@ public class PravegaRequestProcessorTest {
         int readLength = 1000;
 
         StreamSegmentStore store = mock(StreamSegmentStore.class);
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         CompletableFuture<ReadResult> readResult = new CompletableFuture<>();
         readResult.completeExceptionally(new CancellationException("cancel read"));
@@ -214,8 +218,9 @@ public class PravegaRequestProcessorTest {
         int readLength = 1000;
 
         StreamSegmentStore store = mock(StreamSegmentStore.class);
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         TestReadResultEntry entry1 = new TestReadResultEntry(ReadResultEntryType.Truncated, 0, readLength);
 
@@ -250,12 +255,13 @@ public class PravegaRequestProcessorTest {
         ServiceBuilder serviceBuilder = newInlineExecutionInMemoryBuilder(getBuilderConfig());
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
         InOrder order = inOrder(connection);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         // Execute and Verify createSegment/getStreamSegmentInfo calling stack is executed as design.
-        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         assertTrue(append(streamSegmentName, 1, store));
         processor.getStreamSegmentInfo(new WireCommands.GetStreamSegmentInfo(1,  streamSegmentName, ""));
         assertTrue(append(streamSegmentName, 2, store));
@@ -277,16 +283,17 @@ public class PravegaRequestProcessorTest {
         ServiceBuilder serviceBuilder = newInlineExecutionInMemoryBuilder(getBuilderConfig());
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
         InOrder order = inOrder(connection);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         processor.createSegment(new WireCommands.CreateSegment(0, streamSegmentName,
-                                                               WireCommands.CreateSegment.NO_SCALE, 0, ""));
+                                                               WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         order.verify(connection).send(new WireCommands.SegmentCreated(0, streamSegmentName));
 
         String transactionName = StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid);
-        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         assertTrue(append(StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid), 1, store));
         processor.getStreamSegmentInfo(new WireCommands.GetStreamSegmentInfo(2, transactionName, ""));
         assertTrue(append(StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid), 2, store));
@@ -303,7 +310,7 @@ public class PravegaRequestProcessorTest {
         txnid = UUID.randomUUID();
         transactionName = StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid);
 
-        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         assertTrue(append(StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid), 1, store));
         order.verify(connection).send(new WireCommands.SegmentCreated(1, transactionName));
         processor.getStreamSegmentInfo(new WireCommands.GetStreamSegmentInfo(2, transactionName, ""));
@@ -321,7 +328,7 @@ public class PravegaRequestProcessorTest {
         txnid = UUID.randomUUID();
         transactionName = StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid);
 
-        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         assertTrue(append(StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid), 1, store));
         processor.getStreamSegmentInfo(new WireCommands.GetStreamSegmentInfo(2, transactionName, ""));
         assertTrue(append(StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid), 2, store));
@@ -347,6 +354,7 @@ public class PravegaRequestProcessorTest {
         ServiceBuilder serviceBuilder = newInlineExecutionInMemoryBuilder(getBuilderConfig());
         serviceBuilder.initialize();
         StreamSegmentStore store = spy(serviceBuilder.createStreamSegmentService());
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
         InOrder order = inOrder(connection);
         doReturn(Futures.failedFuture(new StreamSegmentMergedException(streamSegmentName))).when(store).sealStreamSegment(
@@ -354,15 +362,15 @@ public class PravegaRequestProcessorTest {
         doReturn(Futures.failedFuture(new StreamSegmentMergedException(streamSegmentName))).when(store).mergeStreamSegment(
                 anyString(), anyString(), any());
 
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         processor.createSegment(new WireCommands.CreateSegment(0, streamSegmentName,
-                WireCommands.CreateSegment.NO_SCALE, 0, ""));
+                WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         order.verify(connection).send(new WireCommands.SegmentCreated(0, streamSegmentName));
 
         String transactionName = StreamSegmentNameUtils.getTransactionNameFromId(streamSegmentName, txnid);
 
-        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         order.verify(connection).send(new WireCommands.SegmentCreated(1, transactionName));
         processor.mergeSegments(new WireCommands.MergeSegments(2, streamSegmentName, transactionName, ""));
         order.verify(connection).send(new WireCommands.SegmentsMerged(2, streamSegmentName, transactionName));
@@ -375,7 +383,7 @@ public class PravegaRequestProcessorTest {
         doReturn(Futures.failedFuture(new StreamSegmentNotExistsException(streamSegmentName))).when(store).mergeStreamSegment(
                 anyString(), anyString(), any());
 
-        processor.createSegment(new WireCommands.CreateSegment(3, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(3, transactionName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         order.verify(connection).send(new WireCommands.SegmentCreated(3, transactionName));
         processor.mergeSegments(new WireCommands.MergeSegments(4, streamSegmentName, transactionName, ""));
 
@@ -390,12 +398,13 @@ public class PravegaRequestProcessorTest {
         ServiceBuilder serviceBuilder = newInlineExecutionInMemoryBuilder(getBuilderConfig());
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
         InOrder order = inOrder(connection);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         // Execute and Verify createSegment/getStreamSegmentInfo calling stack is executed as design.
-        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         order.verify(connection).send(new WireCommands.SegmentCreated(1, streamSegmentName));
 
         processor.getSegmentAttribute(new WireCommands.GetSegmentAttribute(2, streamSegmentName, attribute, ""));
@@ -430,12 +439,13 @@ public class PravegaRequestProcessorTest {
         ServiceBuilder serviceBuilder = newInlineExecutionInMemoryBuilder(getBuilderConfig());
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
         InOrder order = inOrder(connection);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         // Create a segment and append 2 bytes.
-        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         assertTrue(append(streamSegmentName, 1, store));
         assertTrue(append(streamSegmentName, 2, store));
 
@@ -482,12 +492,13 @@ public class PravegaRequestProcessorTest {
         ServiceBuilder serviceBuilder = newInlineExecutionInMemoryBuilder(getReadOnlyBuilderConfig());
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = mock(TableStore.class);
         ServerConnection connection = mock(ServerConnection.class);
         InOrder order = inOrder(connection);
-        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, connection);
+        PravegaRequestProcessor processor = new PravegaRequestProcessor(store, tableStore, connection);
 
         // Execute and Verify createSegment/getStreamSegmentInfo calling stack is executed as design.
-        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, ""));
+        processor.createSegment(new WireCommands.CreateSegment(1, streamSegmentName, WireCommands.CreateSegment.NO_SCALE, 0, "", false));
         order.verify(connection).send(new WireCommands.OperationUnsupported(1, "createSegment", ""));
     }
 

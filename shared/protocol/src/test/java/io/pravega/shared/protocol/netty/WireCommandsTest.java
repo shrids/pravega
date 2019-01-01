@@ -14,6 +14,7 @@ import io.netty.buffer.ByteBufInputStream;
 import io.netty.buffer.Unpooled;
 import io.pravega.shared.protocol.netty.WireCommands.Event;
 import java.io.ByteArrayOutputStream;
+import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.Data;
 import org.junit.Test;
 
+import static io.pravega.shared.protocol.netty.WireCommands.CreateSegment.NO_SCALE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -435,9 +437,56 @@ public class WireCommandsTest {
         testCommand(new WireCommands.StreamSegmentInfo(l - 1, testString1, true, false, false, l, l + 1, l - 1));
     }
 
+    @Data
+    public static final class CreateSegmentV6 implements Request, WireCommand {
+        public static final byte NO_SCALE = (byte) 0;
+        public static final byte IN_KBYTES_PER_SEC = (byte) 1;
+        public static final byte IN_EVENTS_PER_SEC = (byte) 2;
+
+        final WireCommandType type = WireCommandType.CREATE_SEGMENT;
+        final long requestId;
+        final String segment;
+        final byte scaleType;
+        final int targetRate;
+        final String delegationToken;
+
+        @Override
+        public void process(RequestProcessor cp) {
+        }
+
+        @Override
+        public void writeFields(DataOutput out) throws IOException {
+            out.writeLong(requestId);
+            out.writeUTF(segment);
+            out.writeInt(targetRate);
+            out.writeByte(scaleType);
+            out.writeUTF(delegationToken == null ? "" : delegationToken);
+        }
+
+        public static WireCommand readFrom(DataInput in, int length) throws IOException {
+            long requestId = in.readLong();
+            String segment = in.readUTF();
+            int desiredRate = in.readInt();
+            byte scaleType = in.readByte();
+            String delegationToken = in.readUTF();
+
+            return new CreateSegmentV6(requestId, segment, scaleType, desiredRate, delegationToken);
+        }
+    }
+
     @Test
     public void testCreateSegment() throws IOException {
-        testCommand(new WireCommands.CreateSegment(l, testString1, b, i, ""));
+        testCommand(new WireCommands.CreateSegment(l, testString1, b, i, "", false));
+        testCommand(new WireCommands.CreateSegment(l, testString1, NO_SCALE, 0, "", true));
+    }
+
+    @Test
+    public void testCompatabilityCreateSegmentV6() throws IOException {
+        // Test that we are able to decode a message with a previous version
+        ByteArrayOutputStream bout = new ByteArrayOutputStream();
+        CreateSegmentV6 commandV5 = new CreateSegmentV6(l, testString1, b, i, "");
+        commandV5.writeFields(new DataOutputStream(bout));
+        testCommandFromByteArray(bout.toByteArray(), new WireCommands.CreateSegment(l, testString1, b, i, "", false));
     }
 
     @Test

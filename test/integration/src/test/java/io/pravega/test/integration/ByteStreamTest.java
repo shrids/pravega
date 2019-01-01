@@ -65,7 +65,7 @@ public class ByteStreamTest {
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
 
-        this.server = new PravegaConnectionListener(false, servicePort, store);
+        this.server = new PravegaConnectionListener(false, servicePort, store, serviceBuilder.createTableStoreService());
         this.server.startListening();
 
         // 3. Start Pravega Controller service

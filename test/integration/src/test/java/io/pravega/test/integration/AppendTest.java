@@ -37,6 +37,7 @@ import io.pravega.client.stream.mock.MockStreamManager;
 import io.pravega.common.Timer;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
+import io.pravega.segmentstore.contracts.tables.TableStore;
 import io.pravega.segmentstore.server.host.handler.AppendProcessor;
 import io.pravega.segmentstore.server.host.handler.PravegaConnectionListener;
 import io.pravega.segmentstore.server.host.handler.PravegaRequestProcessor;
@@ -101,8 +102,9 @@ public class AppendTest {
     public void testSetupOnNonExistentSegment() throws Exception {
         String segment = "123";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = this.serviceBuilder.createTableStoreService();
         @Cleanup
-        EmbeddedChannel channel = createChannel(store);
+        EmbeddedChannel channel = createChannel(store, tableStore);
 
         UUID uuid = UUID.randomUUID();
         NoSuchSegment setup = (NoSuchSegment) sendRequest(channel, new SetupAppend(1, uuid, segment, ""));
@@ -115,11 +117,12 @@ public class AppendTest {
         String segment = "123";
         ByteBuf data = Unpooled.wrappedBuffer("Hello world\n".getBytes());
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = this.serviceBuilder.createTableStoreService();
 
         @Cleanup
-        EmbeddedChannel channel = createChannel(store);
+        EmbeddedChannel channel = createChannel(store, tableStore);
 
-        SegmentCreated created = (SegmentCreated) sendRequest(channel, new CreateSegment(1, segment, CreateSegment.NO_SCALE, 0, ""));
+        SegmentCreated created = (SegmentCreated) sendRequest(channel, new CreateSegment(1, segment, CreateSegment.NO_SCALE, 0, "", false));
         assertEquals(segment, created.getSegment());
 
         UUID uuid = UUID.randomUUID();
@@ -140,10 +143,11 @@ public class AppendTest {
         String segment = "123";
         ByteBuf data = Unpooled.wrappedBuffer("Hello world\n".getBytes());
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
+        TableStore tableStore = this.serviceBuilder.createTableStoreService();
         @Cleanup
-        EmbeddedChannel channel = createChannel(store);
+        EmbeddedChannel channel = createChannel(store, tableStore);
 
-        SegmentCreated created = (SegmentCreated) sendRequest(channel, new CreateSegment(1, segment, CreateSegment.NO_SCALE, 0, ""));
+        SegmentCreated created = (SegmentCreated) sendRequest(channel, new CreateSegment(1, segment, CreateSegment.NO_SCALE, 0, "", false));
         assertEquals(segment, created.getSegment());
 
         UUID uuid = UUID.randomUUID();
@@ -184,7 +188,7 @@ public class AppendTest {
         return (Reply) decoded;
     }
 
-    static EmbeddedChannel createChannel(StreamSegmentStore store) {
+    static EmbeddedChannel createChannel(StreamSegmentStore store, TableStore tableStore) {
         ServerConnectionInboundHandler lsh = new ServerConnectionInboundHandler();
         EmbeddedChannel channel = new EmbeddedChannel(new ExceptionLoggingHandler(""),
                 new CommandEncoder(null),
@@ -192,7 +196,7 @@ public class AppendTest {
                 new CommandDecoder(),
                 new AppendDecoder(),
                 lsh);
-        lsh.setRequestProcessor(new AppendProcessor(store, lsh, new PravegaRequestProcessor(store, lsh), null));
+        lsh.setRequestProcessor(new AppendProcessor(store, lsh, new PravegaRequestProcessor(store, tableStore, lsh), null));
         return channel;
     }
 
@@ -206,7 +210,7 @@ public class AppendTest {
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
 
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
 
         @Cleanup
@@ -235,7 +239,7 @@ public class AppendTest {
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
 
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
 
         @Cleanup
@@ -261,7 +265,7 @@ public class AppendTest {
         String testString = "Hello world\n";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager("Scope", endpoint, port);
@@ -283,7 +287,7 @@ public class AppendTest {
         String testString = "Hello world\n";
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager("Scope", endpoint, port);

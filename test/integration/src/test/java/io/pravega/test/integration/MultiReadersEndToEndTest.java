@@ -191,7 +191,7 @@ public class MultiReadersEndToEndTest {
         serviceBuilder.initialize();
         StreamSegmentStore store = serviceBuilder.createStreamSegmentService();
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, servicePort, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, servicePort, store, serviceBuilder.createTableStoreService());
         server.startListening();
         @Cleanup
         MockStreamManager streamManager = new MockStreamManager("scope", "localhost", servicePort);

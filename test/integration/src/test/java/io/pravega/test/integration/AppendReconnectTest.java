@@ -33,6 +33,7 @@ import io.pravega.client.stream.impl.PendingEvent;
 import io.pravega.client.stream.mock.MockController;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.segmentstore.contracts.StreamSegmentStore;
+import io.pravega.segmentstore.contracts.tables.TableStore;
 import io.pravega.segmentstore.server.host.handler.AppendProcessor;
 import io.pravega.segmentstore.server.host.handler.PravegaConnectionListener;
 import io.pravega.segmentstore.server.host.handler.PravegaRequestProcessor;
@@ -99,7 +100,7 @@ public class AppendReconnectTest {
         return (Reply) decoded;
     }
 
-    static EmbeddedChannel createChannel(StreamSegmentStore store) {
+    static EmbeddedChannel createChannel(StreamSegmentStore store, TableStore tableStore) {
         ServerConnectionInboundHandler lsh = new ServerConnectionInboundHandler();
         EmbeddedChannel channel = new EmbeddedChannel(new ExceptionLoggingHandler(""),
                 new CommandEncoder(null),
@@ -107,7 +108,7 @@ public class AppendReconnectTest {
                 new CommandDecoder(),
                 new AppendDecoder(),
                 lsh);
-        lsh.setRequestProcessor(new AppendProcessor(store, lsh, new PravegaRequestProcessor(store, lsh), null));
+        lsh.setRequestProcessor(new AppendProcessor(store, lsh, new PravegaRequestProcessor(store, tableStore, lsh), null));
         return channel;
     }
 
@@ -121,7 +122,7 @@ public class AppendReconnectTest {
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
 
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
 
         @Cleanup
@@ -158,7 +159,7 @@ public class AppendReconnectTest {
         StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
 
         @Cleanup
-        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store);
+        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, serviceBuilder.createTableStoreService());
         server.startListening();
 
         @Cleanup
