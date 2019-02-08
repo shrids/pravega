@@ -88,7 +88,7 @@ public class K8SequentialExecutor implements TestExecutor {
                 .withImagePullPolicy("IfNotPresent")
                 .withCommand("/bin/sh")
                 .withArgs("-c", "java -DexecType=KUBERNETES -cp /data/test-collection.jar io.pravega.test.system.SingleJUnitTestRunner "
-                                  + className + "#" + methodName /*+ " > server.log 2>&1 */ + "; exit $?")
+                                  + className + "#" + methodName + " > " + methodName + ".log 2>&1  + ; exit $?")
                 .withVolumeMounts(new V1VolumeMountBuilder().withMountPath("/data").withName("task-pv-storage").build())
                 .endContainer()
                 .withRestartPolicy("Never")

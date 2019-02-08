@@ -31,6 +31,7 @@ import io.pravega.test.system.framework.Environment;
 import io.pravega.test.system.framework.SystemTestRunner;
 import io.pravega.test.system.framework.Utils;
 import io.pravega.test.system.framework.services.Service;
+import java.util.concurrent.TimeUnit;
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Before;
@@ -60,7 +61,7 @@ public class PravegaTest extends AbstractReadWriteTest {
     private final static int NUM_EVENTS = 100;
 
     @Rule
-    public Timeout globalTimeout = Timeout.seconds(5 * 60);
+    public Timeout globalTimeout = Timeout.seconds(7 * 60);
 
     private final ScalingPolicy scalingPolicy = ScalingPolicy.fixed(4);
     private final StreamConfiguration config = StreamConfiguration.builder()
@@ -112,7 +113,7 @@ public class PravegaTest extends AbstractReadWriteTest {
      *
      */
     @Test
-    public void simpleTest() {
+    public void simpleTest() throws InterruptedException {
 
         Service conService = Utils.createPravegaControllerService(null);
         List<URI> ctlURIs = conService.getServiceDetails();
@@ -157,5 +158,6 @@ public class PravegaTest extends AbstractReadWriteTest {
             // try reading until all the written events are read, else the test will timeout.
         } while ((event.getEvent() != null || event.isCheckpoint()) && readCount < NUM_EVENTS);
         assertEquals("Read count should be equal to write count", NUM_EVENTS, readCount);
+        TimeUnit.MINUTES.sleep(5);
     }
 }
