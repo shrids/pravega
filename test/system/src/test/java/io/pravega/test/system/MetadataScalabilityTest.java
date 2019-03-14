@@ -27,6 +27,7 @@ import io.pravega.test.system.framework.SystemTestRunner;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -52,6 +53,7 @@ import java.util.stream.Collectors;
  * Then it performs truncation a random number (less than 1010) of times. 
  */
 @Slf4j
+@Ignore
 @RunWith(SystemTestRunner.class)
 public class MetadataScalabilityTest extends AbstractScaleTests {
     private static final String STREAM_NAME = "metadataScalability";
