@@ -76,6 +76,7 @@ plugins.withId('java') {
         maxParallelForks = System.properties['maxParallelForks'] ? System.properties['maxParallelForks'].toInteger() : 1
         minHeapSize = "128m"
         maxHeapSize = "512m"
+        failFast = true
     }
 
     dependencies {
