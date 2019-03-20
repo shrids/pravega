@@ -27,6 +27,7 @@ import io.pravega.test.system.framework.SystemTestRunner;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -53,6 +54,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @RunWith(SystemTestRunner.class)
+@Ignore
 public class MetadataScalabilityTest extends AbstractScaleTests {
     private static final String STREAM_NAME = "metadataScalability";
     private static final int NUM_SEGMENTS = 10000;
