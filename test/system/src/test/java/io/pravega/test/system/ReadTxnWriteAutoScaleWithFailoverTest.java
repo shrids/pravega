@@ -24,7 +24,6 @@ import io.pravega.common.concurrent.ExecutorServiceHelpers;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.common.hash.RandomFactory;
 import io.pravega.test.system.framework.Environment;
-import io.pravega.test.system.framework.SystemTestRunner;
 import io.pravega.test.system.framework.Utils;
 import io.pravega.test.system.framework.services.Service;
 import java.net.URI;
@@ -45,7 +44,6 @@ import static org.junit.Assert.assertTrue;
 
 @Slf4j
 @Ignore
-@RunWith(SystemTestRunner.class)
 public class ReadTxnWriteAutoScaleWithFailoverTest extends AbstractFailoverTests {
 
     private static final int INIT_NUM_WRITERS = 2;
