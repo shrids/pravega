@@ -11,6 +11,7 @@ package io.pravega.controller.server;
 
 import io.netty.buffer.ByteBuf;
 import io.pravega.auth.AuthenticationException;
+import io.pravega.client.Session;
 import io.pravega.client.netty.impl.ClientConnection;
 import io.pravega.client.netty.impl.ConnectionFactory;
 import io.pravega.client.stream.ScalingPolicy;
@@ -561,6 +562,13 @@ public class SegmentHelperTest {
         public CompletableFuture<ClientConnection> establishConnection(PravegaNodeUri endpoint, ReplyProcessor rp) {
             this.rp = rp;
             connection = new MockConnection(rp);
+            return CompletableFuture.completedFuture(connection);
+        }
+
+        @Override
+        public CompletableFuture<ClientConnection> establishConnection(Session session, PravegaNodeUri endpoint, ReplyProcessor rp) {
+            this.rp = rp;
+            ClientConnection connection = new MockConnection(rp);
             return CompletableFuture.completedFuture(connection);
         }
 
