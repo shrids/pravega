@@ -308,7 +308,7 @@ public class EndToEndTruncationTest {
         assertThrows(RuntimeException.class, () -> writer.writeEvent("test"));
     }
 
-    @Test(timeout = 50000)
+    @Test//(timeout = 120000)
     public void testWriteDuringScaleAndTruncation() throws Exception {
         Stream stream = new StreamImpl("test", "test");
         StreamConfiguration config = StreamConfiguration.builder()
@@ -326,9 +326,11 @@ public class EndToEndTruncationTest {
         @Cleanup
         EventStreamWriter<String> writer = clientFactory.createEventWriter("test", new JavaSerializer<>(),
                 EventWriterConfig.builder().build());
+        System.out.println("=> writer created");
 
         // routing key "0" translates to key 0.8. This write happens to segment 1.
         writer.writeEvent("0", "truncationTest1").get();
+        System.out.println("=> event written");
 
         //Peform scaling operations on the stream.
         ImmutableMap<Double, Double> singleSegmentKeyRange = ImmutableMap.of(0.0, 1.0);
@@ -351,6 +353,7 @@ public class EndToEndTruncationTest {
         streamCutPositions.put(computeSegmentId(4, 2), 0L);
         assertTrue("Truncate stream", controller.truncateStream("test", "test", streamCutPositions).get());
 
+        System.out.println("==> truncate stream completed");
         //write an event.
         writer.writeEvent("0", "truncationTest3");
         writer.flush();
@@ -365,7 +368,9 @@ public class EndToEndTruncationTest {
         EventStreamReader<String> reader = clientFactory.createReader("readerId", "reader", new JavaSerializer<>(),
                 ReaderConfig.builder().build());
 
+        System.out.println("==> reader is created");
         EventRead<String> event = reader.readNextEvent(10000);
+        System.out.println("==> event read " + event);
         assertNotNull(event);
         assertEquals("truncationTest3", event.getEvent());
     }
