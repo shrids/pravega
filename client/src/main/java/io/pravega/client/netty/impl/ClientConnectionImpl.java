@@ -23,9 +23,11 @@ import io.pravega.shared.protocol.netty.WireCommand;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@ToString
 public class ClientConnectionImpl implements ClientConnection {
 
     @Getter
@@ -48,6 +50,9 @@ public class ClientConnectionImpl implements ClientConnection {
 
     @Override
     public void send(WireCommand cmd) throws ConnectionFailedException {
+        if (closed.get()) {
+            log.error("=> ClientConnection already closed name:{} sessionNo: {}", connectionName, session);
+        }
         Exceptions.checkNotClosed(closed.get(), this);
         nettyHandler.setRecentMessage();
         Futures.getAndHandleExceptions(nettyHandler.getChannel().writeAndFlush(cmd), ConnectionFailedException::new);
@@ -55,6 +60,9 @@ public class ClientConnectionImpl implements ClientConnection {
 
     @Override
     public void send(Append append) throws ConnectionFailedException {
+        if (closed.get()) {
+            log.error("=> ClientConnection already closed name:{} sessionNo: {}", connectionName, session);
+        }
         Exceptions.checkNotClosed(closed.get(), this);
         nettyHandler.setRecentMessage();
         batchSizeTracker.recordAppend(append.getEventNumber(), append.getData().readableBytes());
@@ -63,6 +71,9 @@ public class ClientConnectionImpl implements ClientConnection {
 
     @Override
     public void sendAsync(WireCommand cmd, CompletedCallback callback) {
+        if (closed.get()) {
+            log.error("=> ClientConnection already closed name:{} sessionNo: {}", connectionName, session);
+        }
         Exceptions.checkNotClosed(closed.get(), this);
         nettyHandler.setRecentMessage();
         try {
@@ -84,6 +95,9 @@ public class ClientConnectionImpl implements ClientConnection {
 
     @Override
     public void sendAsync(List<Append> appends, CompletedCallback callback) {
+        if (closed.get()) {
+            log.error("=> ClientConnection already closed name:{} sessionNo: {}", connectionName, session);
+        }
         Exceptions.checkNotClosed(closed.get(), this);
         nettyHandler.setRecentMessage();
         Channel ch;
@@ -109,6 +123,7 @@ public class ClientConnectionImpl implements ClientConnection {
 
     @Override
     public void close() {
+        log.info(" => Closing client connection name:{} sessionNo:{}", connectionName, session);
         if (!closed.getAndSet(true)) {
             nettyHandler.closeSession(this);
         }
