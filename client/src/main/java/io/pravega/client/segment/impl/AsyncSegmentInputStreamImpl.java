@@ -175,6 +175,10 @@ class AsyncSegmentInputStreamImpl extends AsyncSegmentInputStream {
                 log.debug("Exception while reading from Segment : {}", segmentId, ex);
             } else {
                 log.warn("Exception while reading from Segment : {}", segmentId, ex);
+                if (ex instanceof ConnectionFailedException) {
+                    log.error("=> Connection failed exception observed with the fix", ex);
+                    closeConnection((ConnectionFailedException) ex);
+                }
             }
             return ex instanceof Exception && !(ex instanceof ConnectionClosedException) && !(ex instanceof SegmentTruncatedException);
         }).runAsync(() -> {
