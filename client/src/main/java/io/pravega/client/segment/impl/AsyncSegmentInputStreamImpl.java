@@ -175,6 +175,7 @@ class AsyncSegmentInputStreamImpl extends AsyncSegmentInputStream {
                 log.debug("Exception while reading from Segment : {}", segmentId, ex);
             } else {
                 log.warn("Exception while reading from Segment : {}", segmentId, ex);
+
             }
             return ex instanceof Exception && !(ex instanceof ConnectionClosedException) && !(ex instanceof SegmentTruncatedException);
         }).runAsync(() -> {
@@ -184,7 +185,13 @@ class AsyncSegmentInputStreamImpl extends AsyncSegmentInputStream {
                             log.warn("Exception while establishing connection with Pravega node", ex);
                             closeConnection(new ConnectionFailedException(ex));
                         }
-                    }).thenCompose(c -> sendRequestOverConnection(request, c));
+                    }).thenCompose(c -> sendRequestOverConnection(request, c))
+                    .whenComplete((reply, ex) -> {
+                        if (ex instanceof ConnectionFailedException ) {
+                            log.debug("ConnectionFailedException observed when sending request {}", request, ex);
+                            closeConnection((ConnectionFailedException) ex);
+                        }
+                    });
         }, connectionFactory.getInternalExecutor());
     }
         
