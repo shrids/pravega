@@ -92,8 +92,8 @@ public class ReaderGroupStateManager {
             nanoClock = System::nanoTime;
         }
         releaseTimer = new TimeoutTimer(TIME_UNIT, nanoClock);
-        acquireTimer = new TimeoutTimer(Duration.ZERO, nanoClock);
-        fetchStateTimer = new TimeoutTimer(Duration.ZERO, nanoClock);
+        acquireTimer = new TimeoutTimer(TIME_UNIT, nanoClock);
+        fetchStateTimer = new TimeoutTimer(TIME_UNIT, nanoClock);
         checkpointTimer = new TimeoutTimer(TIME_UNIT, nanoClock);
     }
 
@@ -137,8 +137,12 @@ public class ReaderGroupStateManager {
                 return;
             }
             log.debug("Removing reader {} from reader grop. CurrentState is: {}", readerId, state);
-            updates.add(new RemoveReader(readerId, lastPosition == null ? Collections.emptyMap()
-                    : lastPosition.asImpl().getOwnedSegmentsWithOffsets()));
+            if (lastPosition != null && !lastPosition.asImpl().getOwnedSegments().containsAll(segments)) {
+                throw new IllegalArgumentException(
+                        "When shutting down a reader: Given position does not match the segments it was assigned: \n"
+                                + segments + " \n vs \n " + lastPosition.asImpl().getOwnedSegments());
+            }
+            updates.add(new RemoveReader(readerId, lastPosition == null ? null : lastPosition.asImpl().getOwnedSegmentsWithOffsets()));
         });
     }
     
@@ -147,41 +151,31 @@ public class ReaderGroupStateManager {
     }
 
     /**
-     * Handles a segment being completed by calling the controller to gather all successors to the
-     * completed segment. To ensure consistent checkpoints, a segment cannot be released while a
-     * checkpoint for the reader is pending, so it may or may not succeed.
-     * 
-     * @return true if the completed segment was released successfully.
+     * Handles a segment being completed by calling the controller to gather all successors to the completed segment.
      */
-    boolean handleEndOfSegment(Segment segmentCompleted) throws ReaderNotInReaderGroupException {
+    void handleEndOfSegment(Segment segmentCompleted, boolean fetchSuccesors) throws ReaderNotInReaderGroupException {
         final Map<Segment, List<Long>> segmentToPredecessor;
-        if (sync.getState().getEndSegments().containsKey(segmentCompleted)) {
-            segmentToPredecessor = Collections.emptyMap();
-        } else {
+        if (fetchSuccesors) {
             val successors = getAndHandleExceptions(controller.getSuccessors(segmentCompleted), RuntimeException::new);
             segmentToPredecessor = successors.getSegmentToPredecessor();
+        } else {
+            segmentToPredecessor = Collections.emptyMap();
         }
 
         AtomicBoolean reinitRequired = new AtomicBoolean(false);
-        boolean result = sync.updateState((state, updates) -> {
+        sync.updateState((state, updates) -> {
             if (!state.isReaderOnline(readerId)) {
                 reinitRequired.set(true);
             } else {
                 log.debug("Marking segment {} as completed in reader group. CurrentState is: {}", segmentCompleted, state);
                 reinitRequired.set(false);
-                //This check guards against another checkpoint having started.
-                if (state.getCheckpointForReader(readerId) == null) {
-                    updates.add(new SegmentCompleted(readerId, segmentCompleted, segmentToPredecessor));
-                    return true;
-                }
+                updates.add(new SegmentCompleted(readerId, segmentCompleted, segmentToPredecessor));
             }
-            return false;
         });
         if (reinitRequired.get()) {
             throw new ReaderNotInReaderGroupException(readerId);
         }
         acquireTimer.zero();
-        return result;
     }
 
     /**
