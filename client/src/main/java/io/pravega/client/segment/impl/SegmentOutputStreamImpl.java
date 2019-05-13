@@ -533,6 +533,13 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                          return CompletableFuture.completedFuture(null);
                      }
                      Preconditions.checkState(state.getConnection() == null);
+                     if (state.needSuccessors.get()) {
+                         CompletableFuture<Void> future = new CompletableFuture<>();
+                         future.completeExceptionally(new ConnectionFailedException("Fail reconnection attempts until " +
+                                                                                            "resendToSuccessorsCallback is processed for " +
+                                                                                            "writer" + writerId + " segmentName: " + segmentName));
+                         return future;
+                     }
                      log.info("Fetching endpoint for segment {}, writerID: {}", segmentName, writerId);
                      return controller.getEndpointForSegment(segmentName).thenComposeAsync((PravegaNodeUri uri) -> {
                          log.info("Establishing connection to {} for {}, writerID: {}", uri, segmentName, writerId);
