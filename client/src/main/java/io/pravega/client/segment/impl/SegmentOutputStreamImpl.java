@@ -535,13 +535,13 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                      Preconditions.checkState(state.getConnection() == null);
                      if (state.needSuccessors.get()) {
                          CompletableFuture<Void> r1 = new CompletableFuture<>();
-                         log.info("resendToSuccessorsCallback has been triggered, wait until it completes before ");
+                         log.info("resendToSuccessorsCallback has been triggered, wait until it completes before trying to re establish connection");
                          r1.completeExceptionally(new ConnectionFailedException("Fail the connection attempt, wait until we " +
                                                                                                    "have executed resendToSuccessorCallback"));
                          return r1;
                      } else {
                          log.info("Fetching endpoint for segment {}, writerID: {}", segmentName, writerId);
-                         final CompletableFuture<Void> result = controller.getEndpointForSegment(segmentName).thenComposeAsync((PravegaNodeUri uri) -> {
+                         return controller.getEndpointForSegment(segmentName).thenComposeAsync((PravegaNodeUri uri) -> {
                              log.info("Establishing connection to {} for {}, writerID: {}", uri, segmentName, writerId);
                              return connectionFactory.establishConnection(Flow.from(requestId), uri, responseProcessor);
                          }, connectionFactory.getInternalExecutor()).thenComposeAsync(connection -> {
@@ -567,7 +567,6 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                                  throw Exceptions.sneakyThrow(t);
                              });
                          }, connectionFactory.getInternalExecutor());
-                         return result;
                      }
                  }, connectionFactory.getInternalExecutor());
         }, new CompletableFuture<ClientConnection>());
