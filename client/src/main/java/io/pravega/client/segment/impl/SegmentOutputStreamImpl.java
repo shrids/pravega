@@ -533,33 +533,42 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                          return CompletableFuture.completedFuture(null);
                      }
                      Preconditions.checkState(state.getConnection() == null);
-                     log.info("Fetching endpoint for segment {}, writerID: {}", segmentName, writerId);
-                     return controller.getEndpointForSegment(segmentName).thenComposeAsync((PravegaNodeUri uri) -> {
-                         log.info("Establishing connection to {} for {}, writerID: {}", uri, segmentName, writerId);
-                         return connectionFactory.establishConnection(Flow.from(requestId), uri, responseProcessor);
-                     }, connectionFactory.getInternalExecutor()).thenComposeAsync(connection -> {
-                         CompletableFuture<Void> connectionSetupFuture = state.newConnection(connection);
-                         SetupAppend cmd = new SetupAppend(requestId, writerId, segmentName, delegationToken);
-                         try {
-                             connection.send(cmd);
-                         } catch (ConnectionFailedException e1) {
-                             // This needs to be invoked here because call to failConnection from netty may occur before state.newConnection above.
-                             state.failConnection(e1);
-                             throw Exceptions.sneakyThrow(e1);
-                         }
-                         return connectionSetupFuture.exceptionally(t -> {
-                             Throwable exception = Exceptions.unwrap(t);
-                             if (exception instanceof SegmentSealedException) {
-                                 log.info("Ending reconnect attempts on writer {} to {} because segment is sealed", writerId, segmentName);
-                                 return null;
+                     if (state.needSuccessors.get()) {
+                         CompletableFuture<Void> r1 = new CompletableFuture<>();
+                         log.info("resendToSuccessorsCallback has been triggered, wait until it completes before ");
+                         r1.completeExceptionally(new ConnectionFailedException("Fail the connection attempt, wait until we " +
+                                                                                                   "have executed resendToSuccessorCallback"));
+                         return r1;
+                     } else {
+                         log.info("Fetching endpoint for segment {}, writerID: {}", segmentName, writerId);
+                         final CompletableFuture<Void> result = controller.getEndpointForSegment(segmentName).thenComposeAsync((PravegaNodeUri uri) -> {
+                             log.info("Establishing connection to {} for {}, writerID: {}", uri, segmentName, writerId);
+                             return connectionFactory.establishConnection(Flow.from(requestId), uri, responseProcessor);
+                         }, connectionFactory.getInternalExecutor()).thenComposeAsync(connection -> {
+                             CompletableFuture<Void> connectionSetupFuture = state.newConnection(connection);
+                             SetupAppend cmd = new SetupAppend(requestId, writerId, segmentName, delegationToken);
+                             try {
+                                 connection.send(cmd);
+                             } catch (ConnectionFailedException e1) {
+                                 // This needs to be invoked here because call to failConnection from netty may occur before state.newConnection above.
+                                 state.failConnection(e1);
+                                 throw Exceptions.sneakyThrow(e1);
                              }
-                             if (exception instanceof NoSuchSegmentException) {
-                                 log.info("Ending reconnect attempts on writer {} to {} because segment is truncated", writerId, segmentName);
-                                 return null;
-                             }
-                             throw Exceptions.sneakyThrow(t);
-                         });
-                     }, connectionFactory.getInternalExecutor());
+                             return connectionSetupFuture.exceptionally(t -> {
+                                 Throwable exception = Exceptions.unwrap(t);
+                                 if (exception instanceof SegmentSealedException) {
+                                     log.info("Ending reconnect attempts on writer {} to {} because segment is sealed", writerId, segmentName);
+                                     return null;
+                                 }
+                                 if (exception instanceof NoSuchSegmentException) {
+                                     log.info("Ending reconnect attempts on writer {} to {} because segment is truncated", writerId, segmentName);
+                                     return null;
+                                 }
+                                 throw Exceptions.sneakyThrow(t);
+                             });
+                         }, connectionFactory.getInternalExecutor());
+                         return result;
+                     }
                  }, connectionFactory.getInternalExecutor());
         }, new CompletableFuture<ClientConnection>());
     }
