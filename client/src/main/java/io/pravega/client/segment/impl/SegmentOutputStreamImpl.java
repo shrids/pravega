@@ -166,6 +166,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
          * @param throwable Error that has occurred that needs to be handled by tearing down the connection.
          */
         private void failConnection(Throwable throwable) {
+            log.info("FailConnection invoked for writer {}", writerId, throwable);
             ClientConnection oldConnection = null;
             CompletableFuture<Void> oldConnectionSetupCompleted = null;
             boolean failSetupConnection = false;
@@ -181,6 +182,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                 log.info("Handling exception {} for connection {} on writer {}. SetupCompleted: {}, Closed: {}",
                          throwable, connection, writerId, connectionSetupCompleted == null ? null : connectionSetupCompleted.isDone(), closed);
                 if (exception == null) {
+                    log.debug("=> Setting exception for writer {} ", writerId, exception);
                     exception = throwable;
                 }
                 connection = null;
@@ -283,7 +285,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
     private final class ResponseProcessor extends FailingReplyProcessor {
         @Override
         public void connectionDropped() {
-            failConnection(new ConnectionFailedException());
+            failConnection(new ConnectionFailedException("Connection dropped for writer " + writerId));
         }
         
         @Override
@@ -528,17 +530,17 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                                              retrySchedule.getMaxDelay(),
                                              t -> log.warn(writerId + " Failed to connect: ", t))
                  .runAsync(() -> {
-                     log.debug("Running reconnect for segment:{} writerID: {}", segmentName, writerId);
+                     log.debug("Running reconnect for segment {} writer {}", segmentName, writerId);
                      if (state.isClosed() || state.isAlreadySealed()) {
+                         // stop reconnect when writer is closed or resend inflight to successors has been completed.
                          return CompletableFuture.completedFuture(null);
                      }
                      Preconditions.checkState(state.getConnection() == null);
                      if (state.needSuccessors.get()) {
-                         CompletableFuture<Void> future = new CompletableFuture<>();
-                         future.completeExceptionally(new ConnectionFailedException("Fail reconnection attempts until " +
-                                                                                            "resendToSuccessorsCallback is processed for " +
-                                                                                            "writer" + writerId + " segmentName: " + segmentName));
-                         return future;
+                         // resend inflight events to successors has been initiated.
+                         log.info("Fail connection attempt for writer {} of sealed Segment {}", segmentName, writerId);
+                         log.debug("current exception", state.exception);
+                         throw Exceptions.sneakyThrow(new ConnectionFailedException("Fail connection attempt to a sealed segment"));
                      }
                      log.info("Fetching endpoint for segment {}, writerID: {}", segmentName, writerId);
                      return controller.getEndpointForSegment(segmentName).thenComposeAsync((PravegaNodeUri uri) -> {

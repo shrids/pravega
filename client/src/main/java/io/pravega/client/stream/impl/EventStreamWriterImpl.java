@@ -159,8 +159,10 @@ public class EventStreamWriterImpl<Type> implements EventStreamWriter<Type>, Tra
                               * inflight that will need to be resent to the new segment when the write lock
                               * is released. (To preserve order)
                               */
+                             log.info("Writing empty event and flushing on all writers");
                              for (SegmentOutputStream writer : selector.getWriters()) {
                                  try {
+                                     log.info("Writing empty event and triggering flush for writer {} on segment {}", writer, writer.getSegmentName());
                                      writer.write(PendingEvent.withoutHeader(null, ByteBufferUtils.EMPTY, null));
                                      writer.flush();
                                  } catch (SegmentSealedException e) {
