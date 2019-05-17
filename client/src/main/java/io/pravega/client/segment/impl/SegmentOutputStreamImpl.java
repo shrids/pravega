@@ -108,7 +108,6 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
         private final ReusableFutureLatch<ClientConnection> setupConnection = new ReusableFutureLatch<>();
         private final ReusableLatch waitingInflight = new ReusableLatch(true);
         private final AtomicBoolean needSuccessors = new AtomicBoolean();
-        private final AtomicBoolean needSuccessorsForTruncation = new AtomicBoolean();
         // this is used to indicate if get Unacked events is invoked.
         private final AtomicBoolean getUnackedEventsInvoked = new AtomicBoolean();
 
@@ -309,7 +308,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
         @Override
         public void segmentIsSealed(SegmentIsSealed segmentIsSealed) {
             log.info("Received SegmentSealed {} on writer {}", segmentIsSealed, writerId);
-            invokeResendCallBack(segmentIsSealed, false);
+            invokeResendCallBack(segmentIsSealed);
         }
 
         @Override
@@ -324,7 +323,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                 state.failConnection(new NoSuchSegmentException(segment));
                 log.info("Segment being written to {} by writer {} no longer exists due to Stream Truncation, resending to the newer segment. {}",
                         noSuchSegment.getSegment(), writerId, noSuchSegment.getServerStackTrace());
-                invokeResendCallBack(noSuchSegment, true);
+                invokeResendCallBack(noSuchSegment);
             }
         }
 
@@ -375,9 +374,8 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
             }
         }
 
-        private void invokeResendCallBack(WireCommand wireCommand, boolean isTruncated) {
+        private void invokeResendCallBack(WireCommand wireCommand) {
             if (state.needSuccessors.compareAndSet(false, true)) {
-                state.needSuccessorsForTruncation.set(isTruncated);
                 Retry.indefinitelyWithExpBackoff(retrySchedule.getInitialMillis(), retrySchedule.getMultiplier(),
                         retrySchedule.getMaxDelay(),
                         t -> log.error(writerId + " to invoke resendToSuccessors callback: ", t))
@@ -537,12 +535,12 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                                              t -> log.warn(writerId + " Failed to connect: ", t))
                  .runAsync(() -> {
                      log.debug("Running reconnect for segment {} writer {}", segmentName, writerId);
-                     if (state.isClosed() || state.isAlreadySealed()) {
+                     if (state.isClosed() || state.isAlreadySealed() || state.getUnackedEventsInvoked.get()) {
                          // stop reconnect when writer is closed or resend inflight to successors has been completed.
                          return CompletableFuture.completedFuture(null);
                      }
                      Preconditions.checkState(state.getConnection() == null);
-                     if (state.needSuccessors.get() && !state.needSuccessorsForTruncation.get()) {
+                     if (state.needSuccessors.get()) {
                          // resend inflight events to successors has been initiated.
                          log.info("Fail connection attempt for writer {} of sealed Segment {}", writerId, segmentName);
                          log.debug("current exception", state.exception);
@@ -595,7 +593,9 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
         state.failConnection(new SegmentSealedException(this.segmentName));
         synchronized (writeOrderLock) {
             log.debug("Acquired writerOrderLock for writer {}", writerId);
-            return Collections.unmodifiableList(state.getAllInflightEvents());
+            final List<PendingEvent> pendingEvents = Collections.unmodifiableList(state.getAllInflightEvents());
+            state.getUnackedEventsInvoked.set(true);
+            return pendingEvents;
         }
     }
 }
