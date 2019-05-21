@@ -108,6 +108,8 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
         private final ReusableFutureLatch<ClientConnection> setupConnection = new ReusableFutureLatch<>();
         private final ReusableLatch waitingInflight = new ReusableLatch(true);
         private final AtomicBoolean needSuccessors = new AtomicBoolean();
+        // this is used to indicate if get Unacked events is invoked.
+        private final AtomicBoolean getUnackedEventsInvoked = new AtomicBoolean();
 
         /**
          * Block until all events are acked by the server.
@@ -166,6 +168,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
          * @param throwable Error that has occurred that needs to be handled by tearing down the connection.
          */
         private void failConnection(Throwable throwable) {
+            log.info("FailConnection invoked for writer {}", writerId, throwable);
             ClientConnection oldConnection = null;
             CompletableFuture<Void> oldConnectionSetupCompleted = null;
             boolean failSetupConnection = false;
@@ -181,6 +184,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                 log.info("Handling exception {} for connection {} on writer {}. SetupCompleted: {}, Closed: {}",
                          throwable, connection, writerId, connectionSetupCompleted == null ? null : connectionSetupCompleted.isDone(), closed);
                 if (exception == null) {
+                    log.debug("=> Setting exception for writer " + writerId, exception);
                     exception = throwable;
                 }
                 connection = null;
@@ -196,7 +200,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
             if (throwable instanceof SegmentSealedException || throwable instanceof NoSuchSegmentException) {
                 setupConnection.releaseExceptionally(throwable);
             } else if (failSetupConnection) {
-                setupConnection.releaseExceptionallyAndReset(throwable);                
+                setupConnection.releaseExceptionallyAndReset(throwable);
             }
             if (oldConnectionSetupCompleted != null) {
                 oldConnectionSetupCompleted.completeExceptionally(throwable);
@@ -283,7 +287,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
     private final class ResponseProcessor extends FailingReplyProcessor {
         @Override
         public void connectionDropped() {
-            failConnection(new ConnectionFailedException());
+            failConnection(new ConnectionFailedException("Connection dropped for writer " + writerId));
         }
         
         @Override
@@ -363,6 +367,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                     if (e == null) {
                         state.connectionSetupComplete(connection);
                     } else {
+                        log.debug("Error while sending inflight during setup append for writer" + writerId, e);
                         failConnection(e);
                     }
                 });
@@ -497,6 +502,7 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                 ClientConnection connection = Futures.getThrowingException(getConnection());
                 connection.send(new KeepAlive());
             } catch (Exception e) {
+                log.debug("Exception observed during getConnection() and sending keepalive", e);
                 failConnection(e);
             }
             state.waitForInflight();
@@ -528,11 +534,18 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                                              retrySchedule.getMaxDelay(),
                                              t -> log.warn(writerId + " Failed to connect: ", t))
                  .runAsync(() -> {
-                     log.debug("Running reconnect for segment:{} writerID: {}", segmentName, writerId);
-                     if (state.isClosed() || state.isAlreadySealed()) {
+                     log.debug("Running reconnect for segment {} writer {}", segmentName, writerId);
+                     if (state.isClosed() || state.isAlreadySealed() || state.getUnackedEventsInvoked.get()) {
+                         // stop reconnect when writer is closed or resend inflight to successors has been completed.
                          return CompletableFuture.completedFuture(null);
                      }
                      Preconditions.checkState(state.getConnection() == null);
+                     if (state.needSuccessors.get()) {
+                         // resend inflight events to successors has been initiated.
+                         log.info("Fail connection attempt for writer {} of sealed Segment {}", writerId, segmentName);
+                         log.debug("current exception", state.exception);
+                         throw Exceptions.sneakyThrow(new ConnectionFailedException("Fail connection attempt to a sealed segment"));
+                     }
                      log.info("Fetching endpoint for segment {}, writerID: {}", segmentName, writerId);
                      return controller.getEndpointForSegment(segmentName).thenComposeAsync((PravegaNodeUri uri) -> {
                          log.info("Establishing connection to {} for {}, writerID: {}", uri, segmentName, writerId);
@@ -577,9 +590,12 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
         // close connection and update the exception to SegmentSealed, this ensures future writes receive a
         // SegmentSealedException.
         log.debug("GetUnackedEventsOnSeal called on {}", writerId);
-        synchronized (writeOrderLock) {   
-            state.failConnection(new SegmentSealedException(this.segmentName));
-            return Collections.unmodifiableList(state.getAllInflightEvents());
+        state.failConnection(new SegmentSealedException(this.segmentName));
+        synchronized (writeOrderLock) {
+            log.debug("Acquired writerOrderLock for writer {}", writerId);
+            final List<PendingEvent> pendingEvents = Collections.unmodifiableList(state.getAllInflightEvents());
+            state.getUnackedEventsInvoked.set(true);
+            return pendingEvents;
         }
     }
 }

@@ -24,7 +24,6 @@ import io.pravega.client.stream.TransactionalEventStreamWriter;
 import io.pravega.client.stream.TxnFailedException;
 import io.pravega.common.Exceptions;
 import io.pravega.common.concurrent.ExecutorServiceHelpers;
-import io.pravega.common.util.ByteBufferUtils;
 import io.pravega.common.util.Retry;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -159,9 +158,13 @@ public class EventStreamWriterImpl<Type> implements EventStreamWriter<Type>, Tra
                               * inflight that will need to be resent to the new segment when the write lock
                               * is released. (To preserve order)
                               */
+                             log.debug("Flushing on all writers");
                              for (SegmentOutputStream writer : selector.getWriters()) {
                                  try {
+                                     /*
+                                     log.info("Writing empty event and triggering flush for writer {} on segment {}", writer, writer.getSegmentName());
                                      writer.write(PendingEvent.withoutHeader(null, ByteBufferUtils.EMPTY, null));
+                                      */
                                      writer.flush();
                                  } catch (SegmentSealedException e) {
                                      // Segment sealed exception observed during a flush. Re-run flush on all the
