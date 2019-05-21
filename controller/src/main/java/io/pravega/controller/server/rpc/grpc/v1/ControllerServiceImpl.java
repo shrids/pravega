@@ -204,7 +204,7 @@ public class ControllerServiceImpl extends ControllerServiceGrpc.ControllerServi
     }
 
     @Override
-    public void getSegmentsImmediatlyFollowing(SegmentId segmentId, StreamObserver<SuccessorResponse> responseObserver) {
+    public void getSegmentsImmediatelyFollowing(SegmentId segmentId, StreamObserver<SuccessorResponse> responseObserver) {
         log.info("getSegmentsImmediatelyFollowing called for segment {} ", segmentId);
         authenticateExecuteAndProcessResults(() -> this.authHelper.checkAuthorization(
                 AuthResourceRepresentation.ofStreamInScope(segmentId.getStreamInfo().getScope(),
@@ -216,6 +216,13 @@ public class ControllerServiceImpl extends ControllerServiceGrpc.ControllerServi
                                            return response.build();
                                        }),
                 responseObserver);
+    }
+
+    /* This deprecated call should be removed once we address: https://github.com/pravega/pravega/issues/3760 */
+    @Override
+    public void getSegmentsImmediatlyFollowing(SegmentId segmentId, StreamObserver<SuccessorResponse> responseObserver) {
+        log.info("getSegmentsImmediatlyFollowing called for segment {} ", segmentId);
+        getSegmentsImmediatelyFollowing(segmentId, responseObserver);
     }
 
     @Override
