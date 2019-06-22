@@ -67,7 +67,7 @@ public class ClientFactoryImpl implements ClientFactory, EventStreamClientFactor
     private final String scope;
     private final Controller controller;
     private final SegmentInputStreamFactory inFactory;
-    private final SegmentOutputStreamFactory outFactory;
+    private final SegmentOutputStreamFactoryImpl outFactory;
     private final ConditionalOutputStreamFactory condFactory;
     private final SegmentMetadataClientFactory metaFactory;
     private final ConnectionFactory connectionFactory;
@@ -180,7 +180,7 @@ public class ClientFactoryImpl implements ClientFactory, EventStreamClientFactor
         };
         String delegationToken = Futures.getAndHandleExceptions(controller.getOrRefreshDelegationTokenFor(segment.getScope(),
                 segment.getStreamName()), RuntimeException::new);
-        SegmentOutputStream out = outFactory.createOutputStreamForSegment(segment, segmentSealedCallBack,
+        SegmentOutputStream out = outFactory.createOutputStreamForSegment(segment, true, segmentSealedCallBack,
                 config.getEventWriterConfig(), delegationToken);
         ConditionalOutputStream cond = condFactory.createConditionalOutputStream(segment, delegationToken, config.getEventWriterConfig());
         SegmentMetadataClient meta = metaFactory.createSegmentMetadataClient(segment, delegationToken);
