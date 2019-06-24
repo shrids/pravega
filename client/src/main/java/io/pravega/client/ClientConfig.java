@@ -63,6 +63,7 @@ public class ClientConfig implements Serializable {
 
     /**
      * Maximum number of connections per Segment store.
+     * Note: This does not include connections created by segment writers.
      */
     private final int maxConnectionsPerSegmentStore;
 
