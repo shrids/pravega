@@ -14,6 +14,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.EventLoop;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.pravega.common.Exceptions;
 import io.pravega.segmentstore.server.IllegalContainerStateException;
 import io.pravega.shared.protocol.netty.Request;
@@ -97,6 +98,17 @@ public class ServerConnectionInboundHandler extends ChannelInboundHandlerAdapter
     @Override
     public void resumeReading() {
         getChannel().config().setAutoRead(true);
+    }
+
+    @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        if (evt instanceof IdleStateEvent) {
+            IdleStateEvent event = (IdleStateEvent) evt;
+            log.warn("Server - Channel {} is idle ({}), closing it", ctx.channel(), event.state());
+            ctx.close();
+        }
+
+        ctx.fireUserEventTriggered(evt);
     }
 
     private Channel getChannel() {
