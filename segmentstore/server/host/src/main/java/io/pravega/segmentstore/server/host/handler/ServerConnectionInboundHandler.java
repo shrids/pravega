@@ -104,7 +104,7 @@ public class ServerConnectionInboundHandler extends ChannelInboundHandlerAdapter
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
         if (evt instanceof IdleStateEvent) {
             IdleStateEvent event = (IdleStateEvent) evt;
-            log.warn("Server - Channel {} is idle ({}), closing it", event.state(), ctx.channel());
+            log.warn("Server - Channel {} is idle ({}), closing it", ctx.channel(), event.state());
             ctx.close();
         }
 

@@ -52,6 +52,7 @@ import static io.pravega.shared.protocol.netty.WireCommands.MAX_WIRECOMMAND_SIZE
  * Hands off any received data from a client to the CommandProcessor.
  */
 public final class PravegaConnectionListener implements AutoCloseable {
+    private static final long IDLE_TIMEOUT_SECONDS = 100L;
     //region Members
 
     private final boolean ssl;
@@ -161,7 +162,7 @@ public final class PravegaConnectionListener implements AutoCloseable {
                  }
                  ServerConnectionInboundHandler lsh = new ServerConnectionInboundHandler();
                  p.addLast(new ExceptionLoggingHandler(ch.remoteAddress().toString()),
-                         new IdleStateHandler(true, 0L, 0L, 10L, TimeUnit.SECONDS),
+                         new IdleStateHandler(true, 0L, 0L, IDLE_TIMEOUT_SECONDS, TimeUnit.SECONDS),
                          new CommandEncoder(null),
                          new LengthFieldBasedFrameDecoder(MAX_WIRECOMMAND_SIZE, 4, 4),
                          new CommandDecoder(),
