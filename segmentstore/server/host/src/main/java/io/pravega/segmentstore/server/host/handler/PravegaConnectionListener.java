@@ -28,6 +28,7 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.internal.logging.InternalLoggerFactory;
 import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import io.pravega.common.Exceptions;
@@ -42,6 +43,7 @@ import io.pravega.shared.protocol.netty.CommandDecoder;
 import io.pravega.shared.protocol.netty.CommandEncoder;
 import io.pravega.shared.protocol.netty.ExceptionLoggingHandler;
 import java.io.File;
+import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLException;
 
 import static io.pravega.shared.protocol.netty.WireCommands.MAX_WIRECOMMAND_SIZE;
@@ -50,6 +52,7 @@ import static io.pravega.shared.protocol.netty.WireCommands.MAX_WIRECOMMAND_SIZE
  * Hands off any received data from a client to the CommandProcessor.
  */
 public final class PravegaConnectionListener implements AutoCloseable {
+    private static final long IDLE_TIMEOUT_SECONDS = 100L;
     //region Members
 
     private final boolean ssl;
@@ -159,6 +162,7 @@ public final class PravegaConnectionListener implements AutoCloseable {
                  }
                  ServerConnectionInboundHandler lsh = new ServerConnectionInboundHandler();
                  p.addLast(new ExceptionLoggingHandler(ch.remoteAddress().toString()),
+                         new IdleStateHandler(true, 0L, 0L, IDLE_TIMEOUT_SECONDS, TimeUnit.SECONDS),
                          new CommandEncoder(null),
                          new LengthFieldBasedFrameDecoder(MAX_WIRECOMMAND_SIZE, 4, 4),
                          new CommandDecoder(),
