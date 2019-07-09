@@ -92,6 +92,7 @@ public class RawClient implements AutoCloseable {
         synchronized (lock) {
             future = requests.remove(reply.getRequestId());
         }
+        log.info("Future {} will be completed for reply {}", future, reply);
         if (future != null) {
             future.complete(reply);
         }
@@ -129,11 +130,14 @@ public class RawClient implements AutoCloseable {
             synchronized (lock) {
                 requests.put(requestId, reply);
             }
+
             c.sendAsync(request, cfe -> {
                 if (cfe != null) {
+                    log.warn("Sending failed due to cfe for request id" + request.getRequestId(), cfe);
                     synchronized (lock) {
                         requests.remove(requestId);
                     }
+                    log.debug("Failing the reply future exceptionally for request id {}", request.getRequestId());
                     reply.completeExceptionally(cfe);
                     closeConnection(cfe);
                 }
