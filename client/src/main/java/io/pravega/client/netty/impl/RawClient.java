@@ -83,7 +83,7 @@ public class RawClient implements AutoCloseable {
     public RawClient(Controller controller, ConnectionFactory connectionFactory, Segment segmentId) {
         this.segmentId = segmentId;
         this.connection = controller.getEndpointForSegment(segmentId.getScopedName())
-                                    .thenCompose((PravegaNodeUri uri) -> connectionFactory.establishConnection(flow, uri, responseProcessor));
+                                    .thenCompose((PravegaNodeUri uri) -> connectionFactory.establishConnection(uri, responseProcessor));
         Futures.exceptionListener(connection, e -> closeConnection(e));
     }
 
@@ -92,6 +92,7 @@ public class RawClient implements AutoCloseable {
         synchronized (lock) {
             future = requests.remove(reply.getRequestId());
         }
+        log.info("Future {} will be completed for reply {}", future, reply);
         if (future != null) {
             future.complete(reply);
         }
@@ -129,11 +130,14 @@ public class RawClient implements AutoCloseable {
             synchronized (lock) {
                 requests.put(requestId, reply);
             }
+
             c.sendAsync(request, cfe -> {
                 if (cfe != null) {
+                    log.warn("Sending failed due to cfe for request id" + request.getRequestId(), cfe);
                     synchronized (lock) {
                         requests.remove(requestId);
                     }
+                    log.debug("Failing the reply future exceptionally for request id {}", request.getRequestId());
                     reply.completeExceptionally(cfe);
                     closeConnection(cfe);
                 }
