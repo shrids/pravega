@@ -21,6 +21,7 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.Epoll;
+import io.netty.channel.epoll.EpollEventLoopGroup;
 import io.netty.channel.epoll.EpollSocketChannel;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
@@ -280,8 +281,12 @@ public class ConnectionPoolImpl implements ConnectionPool {
     }
 
     private EventLoopGroup getEventLoopGroup() {
-        log.warn("Epoll not enabled. Falling back on NIO.");
-        return new NioEventLoopGroup();
+        if (Epoll.isAvailable()) {
+            return new EpollEventLoopGroup();
+        } else {
+            log.warn("Epoll not available. Falling back on NIO.");
+            return new NioEventLoopGroup();
+        }
     }
 
     @Override
