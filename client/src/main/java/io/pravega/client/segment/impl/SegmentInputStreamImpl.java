@@ -18,7 +18,6 @@ import io.pravega.common.util.CircularBuffer;
 import io.pravega.shared.protocol.netty.WireCommands;
 import io.pravega.shared.protocol.netty.WireCommands.SegmentRead;
 import java.nio.ByteBuffer;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import javax.annotation.concurrent.GuardedBy;
 import lombok.Synchronized;
@@ -200,7 +199,7 @@ class SegmentInputStreamImpl implements SegmentInputStream {
         if (outstandingRequest != null) {
             log.debug("Cancel outstanding read request for segment {}", asyncInput.getSegmentId());
             final Timer timer = new Timer();
-            outstandingRequest.completeExceptionally(new CancellationException("Cancel outstanding read request for segment " + asyncInput.getSegmentId()));
+            outstandingRequest.cancel(true);
             log.debug("Completed cancelling outstanding read request for segment {}. Time taken in ms: {}", asyncInput.getSegmentId(),
                       timer.getElapsedMillis());
         }
