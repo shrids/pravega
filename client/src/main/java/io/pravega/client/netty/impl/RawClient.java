@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Dell Inc., or its subsidiaries. All Rights Reserved.
+ * Copyright (c) 2017 Dell Inc., or its subsidiaries. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -99,9 +99,9 @@ public class RawClient implements AutoCloseable {
 
     private void closeConnection(Throwable exceptionToInflightRequests) {
         if (closed.get() || exceptionToInflightRequests instanceof ConnectionClosedException) {
-            log.debug("Closing connection to segment {} with exception {}", this.segmentId, exceptionToInflightRequests);
+            log.debug("Closing connection to segment {} with exception", this.segmentId, exceptionToInflightRequests);
         } else {
-            log.warn("Closing connection to segment {} with exception: {}", this.segmentId, exceptionToInflightRequests);
+            log.warn("Closing connection to segment {} with exception", this.segmentId, exceptionToInflightRequests);
         }
         if (closed.compareAndSet(false, true)) {
             connection.thenAccept(c -> {
