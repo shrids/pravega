@@ -196,9 +196,9 @@ class SegmentInputStreamImpl implements SegmentInputStream {
     public void close() {
         log.trace("Closing {}", this);
         if (outstandingRequest != null) {
-            log.debug("Cancel outstanding read request for segment {}", asyncInput.getSegmentId());
+            log.info("Cancel outstanding read request for segment {}", asyncInput.getSegmentId());
             outstandingRequest.cancel(true);
-            log.debug("Completed cancelling outstanding read request for segment {}", asyncInput.getSegmentId());
+            log.info("Completed cancelling outstanding read request for segment {}", asyncInput.getSegmentId());
         }
         asyncInput.close();
     }
