@@ -25,9 +25,11 @@ import java.util.function.Consumer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBufferManager;
 import org.rocksdb.WriteOptions;
 
 /**
@@ -240,12 +242,18 @@ class RocksDBCache implements Cache {
     }
 
     private Options createDatabaseOptions() {
+        // 300MB off heap usage with 20 percent for index and filter block to prevent its eviction.
+        LRUCache c = new LRUCache(300 * 1024 * 1024, -1, false, 0.2);
         BlockBasedTableConfig tableFormatConfig = new BlockBasedTableConfig()
-                .setBlockSize(cacheBlockSizeKB * 1024L)
+                .setBlockCache(c)
+                .setCacheIndexAndFilterBlocks(true) // use the same block cache for index and bloom filter related memory.
                 .setBlockCacheSize(readCacheSizeMB * 1024L * 1024L)
-                .setCacheIndexAndFilterBlocks(true);
+                .setCacheIndexAndFilterBlocks(true) // enforce index and filter block blocks to use the same cache.
+                .setCacheIndexAndFilterBlocksWithHighPriority(true);// use high priority pool (0.2 * 300MB) for index and filter blocks.
 
-        return new Options()
+
+
+        final Options options = new Options()
                 .setCreateIfMissing(true)
                 .setDbLogDir(Paths.get(this.dbDir, DB_LOG_DIR).toString())
                 .setWalDir(Paths.get(this.dbDir, DB_WRITE_AHEAD_LOG_DIR).toString())
@@ -256,7 +264,9 @@ class RocksDBCache implements Cache {
                 .setMinWriteBufferNumberToMerge(MIN_WRITE_BUFFER_NUMBER_TO_MERGE)
                 .setTableFormatConfig(tableFormatConfig)
                 .setOptimizeFiltersForHits(true)
-                .setUseDirectReads(this.directReads);
+                .setUseDirectReads(this.directReads)
+                .setWriteBufferManager(new WriteBufferManager(writeBufferSizeMB * 1024L * 1024L , c ));
+        return options;
     }
 
     private void clear(boolean recreateDirectory) {
