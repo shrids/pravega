@@ -383,6 +383,8 @@ project('segmentstore:server:host') {
 
     applicationDefaultJvmArgs = ["-server", "-Xms512m", "-XX:+HeapDumpOnOutOfMemoryError",
                                  "-Dlog.dir=PRAVEGA_APP_HOME/logs",
+                                 "-Dcom.sun.management.jmxremote", "-Dcom.sun.management.jmxremote.local.only=false",
+                                 "-Dio.netty.leakDetectionLevel=advanced",
                                  "-Dlog.name=segmentstore",
                                  "-Dpravega.configurationFile=PRAVEGA_APP_HOME/conf/config.properties",
                                  "-Dlogback.configurationFile=PRAVEGA_APP_HOME/conf/logback.xml"]
@@ -444,7 +446,9 @@ project('test:integration') {
     applicationName = "pravega-smallKey"
     mainClassName = "io.pravega.test.integration.SmallKeyTest"
 
-    applicationDefaultJvmArgs = ["-server", "-Xmx2g", "-XX:+HeapDumpOnOutOfMemoryError",
+    applicationDefaultJvmArgs = ["-server", "-Xmx500m", "-XX:+HeapDumpOnOutOfMemoryError",
+                                 "-XX:StartFlightRecording=disk=true, dumponexit=true, filename=recording.jfr, maxsize=1024m, maxage=1d, " +
+                                         "settings=profile, path-to-gc-roots=true",
                                  "-Dlog.dir=/tmp/logs",
                                  "-Dlog.name=smallkey"]
 
