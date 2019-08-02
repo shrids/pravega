@@ -22,12 +22,13 @@ You may obtain a copy of the License at
             <!-- daily rollover. Make sure the path matches the one in the file element or else
              the rollover logs are placed in the working directory. -->
             <fileNamePattern>${log.dir:-.}/${log.name:-pravega}_%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-
+            <minIndex>1</minIndex>
+            <maxIndex>30</maxIndex>
             <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
                 <maxFileSize>10MB</maxFileSize>
             </timeBasedFileNamingAndTriggeringPolicy>
             <!-- keep 30 days' worth of history -->
-            <maxHistory>30</maxHistory>
+            <maxHistory>2</maxHistory>
         </rollingPolicy>
 
         <encoder>

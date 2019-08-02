@@ -101,6 +101,10 @@ services:
         -Dbookkeeper.bkEnsembleSize=2
         -Dbookkeeper.bkAckQuorumSize=2
         -Dbookkeeper.bkWriteQuorumSize=2
+        -DautoScale.muteInSeconds=120
+        -DautoScale.cooldownInSeconds=120
+        -DautoScale.cacheExpiryInSeconds=120
+        -DautoScale.cacheCleanUpInSeconds=120
         -Xmx900m
         -XX:OnError="kill -9 p%"
         -XX:+ExitOnOutOfMemoryError

@@ -441,12 +441,12 @@ project('segmentstore:server:host') {
 
 project('test:integration') {
     apply plugin: 'application'
-    applicationName = "pravega-selftest"
-    mainClassName = "io.pravega.test.integration.selftest.SelfTestRunner"
+    applicationName = "pravega-smallKey"
+    mainClassName = "io.pravega.test.integration.SmallKeyTest"
 
-    applicationDefaultJvmArgs = ["-server", "-Xmx4g", "-XX:+HeapDumpOnOutOfMemoryError",
-                                 "-Dlog.dir=PRAVEGA_APP_HOME/logs",
-                                 "-Dlog.name=selftest"]
+    applicationDefaultJvmArgs = ["-server", "-Xmx2g", "-XX:+HeapDumpOnOutOfMemoryError",
+                                 "-Dlog.dir=/tmp/logs",
+                                 "-Dlog.name=smallkey"]
 
     applicationDistribution.from('src/config') {
         into "conf"
