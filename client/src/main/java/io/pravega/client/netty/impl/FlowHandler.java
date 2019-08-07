@@ -18,6 +18,7 @@ import io.netty.util.concurrent.ScheduledFuture;
 import io.pravega.common.Exceptions;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.common.util.ReusableFutureLatch;
+import io.pravega.common.util.ToStringUtils;
 import io.pravega.shared.protocol.netty.AppendBatchSizeTracker;
 import io.pravega.shared.protocol.netty.ConnectionFailedException;
 import io.pravega.shared.protocol.netty.Reply;
@@ -272,6 +273,7 @@ public class FlowHandler extends ChannelInboundHandlerAdapter implements AutoClo
                 final int openFlowCount = flowIdReplyProcessorMap.size();
                 if (openFlowCount != 0) {
                     log.warn("{} flows are not closed", openFlowCount);
+                    log.debug("Flows which are not closed are {}", flowIdReplyProcessorMap);
                 }
                 final int appendTrackerCount = flowIDBatchSizeTrackerMap.size();
                 if (appendTrackerCount != 0) {
