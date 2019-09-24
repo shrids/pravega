@@ -20,12 +20,16 @@ import io.pravega.auth.TokenException;
 import io.pravega.common.Exceptions;
 import io.pravega.common.LoggerHelpers;
 import io.pravega.common.Timer;
+import io.pravega.common.util.BufferView;
 import io.pravega.segmentstore.contracts.AttributeUpdate;
 import io.pravega.segmentstore.contracts.AttributeUpdateType;
 import io.pravega.segmentstore.contracts.Attributes;
 import io.pravega.segmentstore.contracts.BadAttributeUpdateException;
 import io.pravega.segmentstore.contracts.BadOffsetException;
 import io.pravega.segmentstore.contracts.ContainerNotFoundException;
+import io.pravega.segmentstore.contracts.MergeStreamSegmentResult;
+import io.pravega.segmentstore.contracts.ReadResult;
+import io.pravega.segmentstore.contracts.SegmentProperties;
 import io.pravega.segmentstore.contracts.StreamSegmentExistsException;
 import io.pravega.segmentstore.contracts.StreamSegmentNotExistsException;
 import io.pravega.segmentstore.contracts.StreamSegmentSealedException;
@@ -51,10 +55,12 @@ import io.pravega.shared.protocol.netty.WireCommands.SetupAppend;
 import io.pravega.shared.protocol.netty.WireCommands.WrongHost;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -124,7 +130,68 @@ public class AppendProcessor extends DelegatingRequestProcessor {
      */
     AppendProcessor(StreamSegmentStore store, ServerConnection connection, RequestProcessor next, SegmentStatsRecorder statsRecorder,
                     DelegationTokenVerifier tokenVerifier, boolean replyWithStackTraceOnError) {
+        StreamSegmentStore mockedStore = new StreamSegmentStore() {
+
+            @Override
+            public CompletableFuture<Long> append(String streamSegmentName, BufferView data, Collection<AttributeUpdate> attributeUpdates, Duration timeout) {
+                if (streamSegmentName.contains("test")) {
+
+                }
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<Long> append(String streamSegmentName, long offset, BufferView data, Collection<AttributeUpdate> attributeUpdates, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<Void> updateAttributes(String streamSegmentName, Collection<AttributeUpdate> attributeUpdates, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<Map<UUID, Long>> getAttributes(String streamSegmentName, Collection<UUID> attributeIds, boolean cache, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<ReadResult> read(String streamSegmentName, long offset, int maxLength, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<SegmentProperties> getStreamSegmentInfo(String streamSegmentName, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<Void> createStreamSegment(String streamSegmentName, Collection<AttributeUpdate> attributes, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<MergeStreamSegmentResult> mergeStreamSegment(String targetSegmentName, String sourceSegmentName, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<Long> sealStreamSegment(String streamSegmentName, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<Void> deleteStreamSegment(String streamSegmentName, Duration timeout) {
+                return null;
+            }
+
+            @Override
+            public CompletableFuture<Void> truncateStreamSegment(String streamSegmentName, long offset, Duration timeout) {
+                return null;
+            }
+        };
         this.store = Preconditions.checkNotNull(store, "store");
+
         this.connection = Preconditions.checkNotNull(connection, "connection");
         this.nextRequestProcessor = Preconditions.checkNotNull(next, "next");
         this.statsRecorder = Preconditions.checkNotNull(statsRecorder, statsRecorder);

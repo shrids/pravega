@@ -15,6 +15,7 @@ import io.pravega.shared.protocol.netty.AppendBatchSizeTracker;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * See {@link AppendBatchSizeTracker}.
@@ -28,6 +29,7 @@ import java.util.function.Supplier;
  * synchronous writers. Otherwise the batch size is set to the amount of data that will be written in the next
  * {@link #MAX_BATCH_TIME_MILLIS} or half the server round trip time (whichever is less)
  */
+@Slf4j
 class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
     private static final int MAX_BATCH_TIME_MILLIS = 100;
     private static final int MAX_BATCH_SIZE = 32 * 1024;
@@ -55,12 +57,17 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
         millisBetweenAppends.addNewSample(now - last);
         appendsOutstanding.addNewSample(eventNumber - lastAckNumber.get());
         eventSize.addNewSample(size);
+        log.info("=> Record Append == appendsOutstanding: {} millilsBetweenAppends: {}, eventSize : {} eventNumber: {}, size: {}",
+                 appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber,
+                 size);
     }
 
     @Override
     public void recordAck(long eventNumber) {
         lastAckNumber.getAndSet(eventNumber);
         appendsOutstanding.addNewSample(lastAppendNumber.get() - eventNumber);
+        log.info("=> Record Ack == appendsOutstanding: {} millilsBetweenAppends: {}, eventSize : {}, eventNumber: {}, ",
+                 appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber);
     }
 
     /**
@@ -69,15 +76,20 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
      */
     @Override
     public int getAppendBlockSize() {
+        final int blocksize;
         long numInflight = lastAppendNumber.get() - lastAckNumber.get();
         if (numInflight <= 1) {
-            return 0;
+            blocksize = 0;
+        } else {
+            double appendsInMaxBatch = Math.max(1.0, MAX_BATCH_TIME_MILLIS / millisBetweenAppends.getCurrentValue());
+            double targetAppendsOutstanding = MathHelpers.minMax(appendsOutstanding.getCurrentValue() * 0.5, 1.0,
+                                                                 appendsInMaxBatch);
+            blocksize = (int) MathHelpers.minMax((long) (targetAppendsOutstanding * eventSize.getCurrentValue()), 0,
+                                                 MAX_BATCH_SIZE);
         }
-        double appendsInMaxBatch = Math.max(1.0, MAX_BATCH_TIME_MILLIS / millisBetweenAppends.getCurrentValue());
-        double targetAppendsOutstanding = MathHelpers.minMax(appendsOutstanding.getCurrentValue() * 0.5, 1.0,
-                                                             appendsInMaxBatch);
-        return (int) MathHelpers.minMax((long) (targetAppendsOutstanding * eventSize.getCurrentValue()), 0,
-                                        MAX_BATCH_SIZE);
+        log.info("=> get appendBlockSize appendsOutstanding: {} millilsBetweenAppends: {}, eventSize : {} blocksize: {}, numInFlight: {}",
+                 appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), blocksize, numInflight);
+        return blocksize;
     }
 
     @Override
