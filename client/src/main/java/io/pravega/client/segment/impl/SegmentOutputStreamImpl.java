@@ -299,6 +299,12 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
     }
 
     private final class ResponseProcessor extends FailingReplyProcessor {
+
+        @Override
+        public String getSegment() {
+            return segmentName;
+        }
+
         @Override
         public void connectionDropped() {
             failConnection(new ConnectionFailedException("Connection dropped for writer " + writerId));

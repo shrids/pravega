@@ -238,7 +238,12 @@ public class FlowHandler extends ChannelInboundHandlerAdapter implements AutoClo
             final WireCommands.DataAppended dataAppended = (WireCommands.DataAppended) cmd;
             final AppendBatchSizeTracker batchSizeTracker = getAppendBatchSizeTracker(dataAppended.getRequestId());
             if (batchSizeTracker != null) {
-                batchSizeTracker.recordAck(dataAppended.getEventNumber());
+                Optional<ReplyProcessor> rp = getReplyProcessor(cmd);
+                if (rp.isPresent()) {
+                    batchSizeTracker.recordAck(dataAppended.getEventNumber(), rp.get().getSegment());
+                } else {
+                    batchSizeTracker.recordAck(dataAppended.getEventNumber(), "");
+                }
             }
         }
         // Obtain ReplyProcessor and process the reply.

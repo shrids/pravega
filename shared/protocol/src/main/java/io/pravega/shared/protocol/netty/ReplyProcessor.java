@@ -19,6 +19,10 @@ public interface ReplyProcessor {
     default void process(Reply reply) {
         reply.process(this);
     }
+
+    default String getSegment() {
+        return "";
+    }
     
     void hello(Hello hello);
     

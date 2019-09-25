@@ -193,7 +193,7 @@ public class CommandEncoder extends MessageToByteEncoder<Object> {
                     appendTracker.apply(append.getFlowId());
 
             if (blockSizeSupplier != null) {
-                blockSizeSupplier.recordAppend(append.getEventNumber(), data.readableBytes());
+                blockSizeSupplier.recordAppend(append.getEventNumber(), data.readableBytes(), append.getSegment());
             }
 
             if (isChannelFree()) {
@@ -299,7 +299,7 @@ public class CommandEncoder extends MessageToByteEncoder<Object> {
         final int msgSize = append.getData().readableBytes();
         int blockSize = 0;
         if (blockSizeSupplier != null) {
-            blockSize = blockSizeSupplier.getAppendBlockSize();
+            blockSize = blockSizeSupplier.getAppendBlockSize(append.getSegment());
         }
         segmentBeingAppendedTo = append.segment;
         writerIdPerformingAppends = append.writerId;

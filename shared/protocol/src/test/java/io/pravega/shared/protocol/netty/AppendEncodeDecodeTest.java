@@ -248,17 +248,17 @@ public class AppendEncodeDecodeTest {
         private final int appendBlockSize;  
 
         @Override
-        public int getAppendBlockSize() {
+        public int getAppendBlockSize(String s) {
             return appendBlockSize;
         }
 
         @Override
-        public void recordAppend(long eventNumber, int size) {
+        public void recordAppend(long eventNumber, int size, String s) {
 
         }
 
         @Override
-        public void recordAck(long eventNumber) {
+        public void recordAck(long eventNumber, String s) {
         }
 
         @Override

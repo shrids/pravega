@@ -86,6 +86,7 @@ public class AppendProcessor extends DelegatingRequestProcessor {
     private final StreamSegmentStore store;
     private final ServerConnection connection;
     private final AtomicLong pendingBytes = new AtomicLong(0);
+    private final AtomicLong mockLength = new AtomicLong(0);
 
     @Getter
     private final RequestProcessor nextRequestProcessor;
@@ -325,7 +326,12 @@ public class AppendProcessor extends DelegatingRequestProcessor {
         if (append.isConditional()) {
             return store.append(append.getSegment(), append.getExpectedLength(), buf, attributes, TIMEOUT);
         } else {
-            return store.append(append.getSegment(), buf, attributes, TIMEOUT);
+            if (append.getSegment().contains("test/")) {
+                //mock output for test segments.
+                return CompletableFuture.completedFuture(mockLength.addAndGet(1));
+            } else {
+                return store.append(append.getSegment(), buf, attributes, TIMEOUT);
+            }
         }
     }
 
@@ -377,7 +383,7 @@ public class AppendProcessor extends DelegatingRequestProcessor {
                 }
             }
       
-            pauseOrResumeReading();
+            pauseOrResumeReading(append.getSegment());
             performNextWrite();
         } catch (Throwable e) {
             success = false;
@@ -419,7 +425,7 @@ public class AppendProcessor extends DelegatingRequestProcessor {
                     segment, containerId, writerId, doingWhat);
             connection.send(new WrongHost(requestId, segment, "", clientReplyStackTrace));
         } else if (u instanceof BadAttributeUpdateException) {
-            log.warn("Bad attribute update by {} on segment {}.", writerId, segment, u);
+            log.warn("Bad attribute update by {} on segment {} for eventNumber {}.", writerId, segment, eventNumber, u);
             connection.send(new InvalidEventNumber(writerId, requestId, clientReplyStackTrace));
             connection.close();
         } else if (u instanceof TokenException) {
@@ -450,15 +456,21 @@ public class AppendProcessor extends DelegatingRequestProcessor {
      * If there is too much data waiting throttle the producer by stopping consumption from the socket.
      * If there is room for more data, we resume consuming from the socket.
      */
-    private void pauseOrResumeReading() {
+    private void pauseOrResumeReading(String segment) {
         long bytesWaiting = getPendingBytes();
 
         if (bytesWaiting > HIGH_WATER_MARK) {
             log.debug("Pausing writing from connection {}", connection);
+            if (segment.contains("test/")) {
+                log.info("=> Pause writing");
+            }
             connection.pauseReading();
         }
         if (bytesWaiting < LOW_WATER_MARK) {
             log.trace("Resuming writing from connection {}", connection);
+            if (segment.contains("test/")) {
+                log.info("=> Resume writing");
+            }
             connection.resumeReading();
         }
     }
@@ -496,7 +508,7 @@ public class AppendProcessor extends DelegatingRequestProcessor {
             waitingAppends.put(id, append);
         }
         setPendingBytes(getPendingBytes() + append.getData().readableBytes());
-        pauseOrResumeReading();
+        pauseOrResumeReading(append.getSegment());
         performNextWrite();
     }
     //endregion

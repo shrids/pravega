@@ -50,24 +50,28 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
     }
 
     @Override
-    public void recordAppend(long eventNumber, int size) {
+    public void recordAppend(long eventNumber, int size, String segment) {
         long now = Math.max(lastAppendTime.get(), clock.get());
         long last = lastAppendTime.getAndSet(now);
         lastAppendNumber.set(eventNumber);
         millisBetweenAppends.addNewSample(now - last);
         appendsOutstanding.addNewSample(eventNumber - lastAckNumber.get());
         eventSize.addNewSample(size);
-        log.info("=> Record Append == appendsOutstanding: {} millilsBetweenAppends: {}, eventSize : {} eventNumber: {}, size: {}",
-                 appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber,
-                 size);
+        if (segment.contains("test/")) {
+            log.info("=> Record Append == appendsOutstanding: {} millisBetweenAppends: {}, eventSize : {} eventNumber: {}, size: {}",
+                     appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber,
+                     size);
+        }
     }
 
     @Override
-    public void recordAck(long eventNumber) {
+    public void recordAck(long eventNumber, String segment) {
         lastAckNumber.getAndSet(eventNumber);
         appendsOutstanding.addNewSample(lastAppendNumber.get() - eventNumber);
-        log.info("=> Record Ack == appendsOutstanding: {} millilsBetweenAppends: {}, eventSize : {}, eventNumber: {}, ",
-                 appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber);
+        if (segment.contains("test/")) {
+            log.info("=> Record Ack == appendsOutstanding: {} millisBetweenAppends: {}, eventSize : {}, eventNumber: {}, ",
+                     appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber);
+        }
     }
 
     /**
@@ -75,7 +79,7 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
      * {@link #MAX_BATCH_TIME_MILLIS} or half the server round trip time (whichever is less).
      */
     @Override
-    public int getAppendBlockSize() {
+    public int getAppendBlockSize(String segment) {
         final int blocksize;
         long numInflight = lastAppendNumber.get() - lastAckNumber.get();
         if (numInflight <= 1) {
@@ -87,8 +91,11 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
             blocksize = (int) MathHelpers.minMax((long) (targetAppendsOutstanding * eventSize.getCurrentValue()), 0,
                                                  MAX_BATCH_SIZE);
         }
-        log.info("=> get appendBlockSize appendsOutstanding: {} millilsBetweenAppends: {}, eventSize : {} blocksize: {}, numInFlight: {}",
-                 appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), blocksize, numInflight);
+        if (segment.contains("test/")) {
+            log.info("=> get appendBlockSize == appendsOutstanding: {} millisBetweenAppends: {}, eventSize : {} blocksize: {}, " +
+                             "numInFlight: {}",
+                     appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), blocksize, numInflight);
+        }
         return blocksize;
     }
 
