@@ -352,7 +352,9 @@ public class AppendProcessor extends DelegatingRequestProcessor {
                     segment, containerId, writerId, doingWhat);
             connection.send(new WrongHost(requestId, segment, "", clientReplyStackTrace));
         } else if (u instanceof BadAttributeUpdateException) {
-            log.warn("Bad attribute update by {} on segment {}.", writerId, segment, u);
+            log.debug("=> BadAttributeUpdateException writerId {}, requestId {}, eventNumber: {}, error {}", writerId, requestId,
+                      eventNumber, u.getMessage());
+            log.warn("Bad attribute update by {} on segment {} for event number {}.", writerId, segment, eventNumber, u);
             connection.send(new InvalidEventNumber(writerId, requestId, clientReplyStackTrace));
             connection.close();
         } else if (u instanceof TokenException) {
