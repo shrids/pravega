@@ -23,6 +23,7 @@ import io.pravega.client.stream.Transaction.Status;
 import io.pravega.client.stream.TransactionalEventStreamWriter;
 import io.pravega.client.stream.TxnFailedException;
 import io.pravega.common.Exceptions;
+import io.pravega.common.Timer;
 import io.pravega.common.concurrent.ExecutorServiceHelpers;
 import io.pravega.common.util.ByteBufferUtils;
 import io.pravega.common.util.Retry;
@@ -112,10 +113,14 @@ public class EventStreamWriterImpl<Type> implements EventStreamWriter<Type>, Tra
     }
     
     private CompletableFuture<Void> writeEventInternal(String routingKey, Type event) {
+        Timer t1 = new Timer();
         Preconditions.checkNotNull(event);
         Exceptions.checkNotClosed(closed.get(), this);
         ByteBuffer data = serializer.serialize(event);
+        long serializationTime = t1.getElapsedMillis();
+        Timer t2 = new Timer();
         CompletableFuture<Void> ackFuture = new CompletableFuture<Void>();
+
         synchronized (writeFlushLock) {
             synchronized (writeSealLock) {                
                 SegmentOutputStream segmentWriter = selector.getSegmentOutputStreamForKey(routingKey);
@@ -127,6 +132,8 @@ public class EventStreamWriterImpl<Type> implements EventStreamWriter<Type>, Tra
                 segmentWriter.write(PendingEvent.withHeader(routingKey, data, ackFuture));
             }
         }
+        long writeTime = t2.getElapsedMillis();
+        log.info("===T==> EventStreamWriter: Serializationtime,{},writeTime,{}", serializationTime, writeTime);
         return ackFuture;
     }
     

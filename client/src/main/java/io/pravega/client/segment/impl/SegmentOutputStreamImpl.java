@@ -18,6 +18,7 @@ import io.pravega.client.netty.impl.ConnectionFactory;
 import io.pravega.client.stream.impl.Controller;
 import io.pravega.client.stream.impl.PendingEvent;
 import io.pravega.common.Exceptions;
+import io.pravega.common.Timer;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.common.util.Retry;
 import io.pravega.common.util.Retry.RetryWithBackoff;
@@ -449,9 +450,11 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
      */
     @Override
     public void write(PendingEvent event) {
+        Timer t = new Timer();
         //State is set to sealed during a Transaction abort and the segment writer should not throw an {@link IllegalStateException} in such a case.
         checkState(StreamSegmentNameUtils.isTransactionSegment(segmentName) || !state.isAlreadySealed(), "Segment: %s is already sealed", segmentName);
         synchronized (writeOrderLock) {
+            Timer t1 = new Timer();
             ClientConnection connection;
             try {
                 // if connection is null getConnection() establishes a connection and retransmits all events in inflight
@@ -462,7 +465,11 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                 state.addToInflight(event);
                 return;
             }
+            long getConnectionTime = t1.getElapsedMillis();
+            Timer t2 = new Timer();
             long eventNumber = state.addToInflight(event);
+            long addToInflightTime = t2.getElapsedMillis();
+            Timer t3 = new Timer();
             try {
                 Append append = new Append(segmentName, writerId, eventNumber, 1, event.getData(), null, requestId);
                 log.trace("Sending append request: {}", append);
@@ -471,6 +478,9 @@ class SegmentOutputStreamImpl implements SegmentOutputStream {
                 log.warn("Connection " + writerId + " failed due to: ", e);
                 reconnect(); // As the message is inflight, this will perform the retransmission.
             }
+            long nwSendTime = t3.getElapsedMillis();
+            log.info("===T==> SegmentOutputStream: CompleteWriteTime,{},getConnectionTime,{},addToInflightTime,{},nwSendTime,{}",
+                     t.getElapsedMillis(), getConnectionTime, addToInflightTime, nwSendTime);
         }
     }
     
