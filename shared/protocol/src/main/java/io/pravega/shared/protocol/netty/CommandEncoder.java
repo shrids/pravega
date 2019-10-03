@@ -417,6 +417,7 @@ public class CommandEncoder extends MessageToByteEncoder<Object> {
         @Override
         public void run() {
             if (tokenCounter.get() == token) {
+                log.info("==> BlockTimeout invoked");
                 channel.writeAndFlush(new BlockTimeout(token));
             }
         }

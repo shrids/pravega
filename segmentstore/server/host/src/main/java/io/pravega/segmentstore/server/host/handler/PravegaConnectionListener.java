@@ -23,6 +23,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.flush.FlushConsolidationHandler;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
@@ -189,7 +190,8 @@ public final class PravegaConnectionListener implements AutoCloseable {
                  }
 
                  ServerConnectionInboundHandler lsh = new ServerConnectionInboundHandler();
-                 p.addLast(new ExceptionLoggingHandler(ch.remoteAddress().toString()),
+                 p.addLast(
+                         new ExceptionLoggingHandler(ch.remoteAddress().toString()),
                          new CommandEncoder(null),
                          new LengthFieldBasedFrameDecoder(MAX_WIRECOMMAND_SIZE, 4, 4),
                          new CommandDecoder(),

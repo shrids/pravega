@@ -62,7 +62,7 @@ services:
         - zookeeper
 
   controller:
-    image: pravega/pravega
+    image: pravega/pravega:0.6.0-2368.a08c2a6-SNAPSHOT
     ports:
       - "9090:9090"
       - "10080:10080"
@@ -84,7 +84,7 @@ services:
       - zookeeper
 
   segmentstore:
-    image: pravega/pravega
+    image: pravega/pravega:0.6.0-2368.a08c2a6-SNAPSHOT
     ports:
       - "12345:12345"
     command: segmentstore

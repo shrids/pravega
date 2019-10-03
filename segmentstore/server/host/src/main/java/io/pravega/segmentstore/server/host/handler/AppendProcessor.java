@@ -131,68 +131,7 @@ public class AppendProcessor extends DelegatingRequestProcessor {
      */
     AppendProcessor(StreamSegmentStore store, ServerConnection connection, RequestProcessor next, SegmentStatsRecorder statsRecorder,
                     DelegationTokenVerifier tokenVerifier, boolean replyWithStackTraceOnError) {
-        StreamSegmentStore mockedStore = new StreamSegmentStore() {
-
-            @Override
-            public CompletableFuture<Long> append(String streamSegmentName, BufferView data, Collection<AttributeUpdate> attributeUpdates, Duration timeout) {
-                if (streamSegmentName.contains("test")) {
-
-                }
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<Long> append(String streamSegmentName, long offset, BufferView data, Collection<AttributeUpdate> attributeUpdates, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<Void> updateAttributes(String streamSegmentName, Collection<AttributeUpdate> attributeUpdates, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<Map<UUID, Long>> getAttributes(String streamSegmentName, Collection<UUID> attributeIds, boolean cache, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<ReadResult> read(String streamSegmentName, long offset, int maxLength, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<SegmentProperties> getStreamSegmentInfo(String streamSegmentName, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<Void> createStreamSegment(String streamSegmentName, Collection<AttributeUpdate> attributes, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<MergeStreamSegmentResult> mergeStreamSegment(String targetSegmentName, String sourceSegmentName, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<Long> sealStreamSegment(String streamSegmentName, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<Void> deleteStreamSegment(String streamSegmentName, Duration timeout) {
-                return null;
-            }
-
-            @Override
-            public CompletableFuture<Void> truncateStreamSegment(String streamSegmentName, long offset, Duration timeout) {
-                return null;
-            }
-        };
         this.store = Preconditions.checkNotNull(store, "store");
-
         this.connection = Preconditions.checkNotNull(connection, "connection");
         this.nextRequestProcessor = Preconditions.checkNotNull(next, "next");
         this.statsRecorder = Preconditions.checkNotNull(statsRecorder, statsRecorder);
@@ -326,12 +265,7 @@ public class AppendProcessor extends DelegatingRequestProcessor {
         if (append.isConditional()) {
             return store.append(append.getSegment(), append.getExpectedLength(), buf, attributes, TIMEOUT);
         } else {
-            if (append.getSegment().contains("test/")) {
-                //mock output for test segments.
-                return CompletableFuture.completedFuture(mockLength.addAndGet(1));
-            } else {
-                return store.append(append.getSegment(), buf, attributes, TIMEOUT);
-            }
+            return store.append(append.getSegment(), buf, attributes, TIMEOUT);
         }
     }
 
@@ -499,6 +433,9 @@ public class AppendProcessor extends DelegatingRequestProcessor {
      */
     @Override
     public void append(Append append) {
+        if ( append.getSegment().contains("test/")) {
+            log.info("=> AP : Append,{}", append.getEventNumber());
+        }
         log.trace("Processing append received from client {}", append);
         UUID id = append.getWriterId();
         synchronized (lock) {

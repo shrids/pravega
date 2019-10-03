@@ -58,7 +58,7 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
         appendsOutstanding.addNewSample(eventNumber - lastAckNumber.get());
         eventSize.addNewSample(size);
         if (segment.contains("test/")) {
-            log.info("=> Record Append == appendsOutstanding: {} millisBetweenAppends: {}, eventSize : {} eventNumber: {}, size: {}",
+            log.info("=> Record Append : appendsOutstanding, {}, millisBetweenAppend, {}, eventSize, {}, eventNumber, {}, size, {}",
                      appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber,
                      size);
         }
@@ -69,7 +69,7 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
         lastAckNumber.getAndSet(eventNumber);
         appendsOutstanding.addNewSample(lastAppendNumber.get() - eventNumber);
         if (segment.contains("test/")) {
-            log.info("=> Record Ack == appendsOutstanding: {} millisBetweenAppends: {}, eventSize : {}, eventNumber: {}, ",
+            log.info("=> Record Ack : appendsOutstanding, {}, millisBetweenAppends, {}, eventSize, {}, eventNumber, {}, ",
                      appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), eventNumber);
         }
     }
@@ -92,8 +92,8 @@ class AppendBatchSizeTrackerImpl implements AppendBatchSizeTracker {
                                                  MAX_BATCH_SIZE);
         }
         if (segment.contains("test/")) {
-            log.info("=> get appendBlockSize == appendsOutstanding: {} millisBetweenAppends: {}, eventSize : {} blocksize: {}, " +
-                             "numInFlight: {}",
+            log.info("=> get appendBlockSize : appendsOutstanding, {}, millisBetweenAppends, {}, eventSize, {}, blocksize, {}, " +
+                             "numInFlight, {}",
                      appendsOutstanding.getCurrentValue(), millisBetweenAppends.getCurrentValue(), eventSize.getCurrentValue(), blocksize, numInflight);
         }
         return blocksize;

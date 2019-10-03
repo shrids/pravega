@@ -80,10 +80,19 @@ public final class ReadWriteUtils {
         @Cleanup
         EventStreamWriter<String> writer = clientFactory.createEventWriter(streamName, new UTF8StringSerializer(),
                 EventWriterConfig.builder().build());
+        String tenByte = "1234567890"; // 10 bytes
+        StringBuffer buf = new StringBuffer();
+        for (int i = 0; i < 10; i ++) {
+            buf.append(tenByte);
+        }
+
+        String event = buf.toString(); // 100 byte string
         for (int i = offset; i < totalEvents; i++) {
-            writer.writeEvent(String.valueOf(i)).join();
+            writer.writeEvent(event);
             log.info("Writing event: {} to stream {}", i, streamName);
         }
+        log.info("==> Invoking flush");
+        writer.flush();
     }
 
     public static void writeEvents(EventStreamClientFactory clientFactory, String streamName, int totalEvents) {

@@ -120,7 +120,7 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
             if (checkpoint != null) {
                 return createEmptyEvent(checkpoint);
             }
-            EventSegmentReader segmentReader = orderer.nextSegment(readers);
+                EventSegmentReader segmentReader = orderer.nextSegment(readers);
             if (segmentReader == null) {
                 Exceptions.handleInterrupted(() -> Thread.sleep(waitTime));
                 buffer = null;
