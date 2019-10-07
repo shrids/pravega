@@ -258,7 +258,8 @@ public class AppendEncodeDecodeTest {
         }
 
         @Override
-        public void recordAck(long eventNumber, String s) {
+        public long recordAck(long eventNumber, String s) {
+            return 0;
         }
 
         @Override

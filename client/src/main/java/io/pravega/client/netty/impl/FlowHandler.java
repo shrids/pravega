@@ -19,6 +19,7 @@ import io.pravega.client.stream.impl.ConnectionClosedException;
 import io.pravega.common.Exceptions;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.common.util.ReusableFutureLatch;
+import io.pravega.shared.metrics.MetricNotifier;
 import io.pravega.shared.protocol.netty.AppendBatchSizeTracker;
 import io.pravega.shared.protocol.netty.ConnectionFailedException;
 import io.pravega.shared.protocol.netty.Reply;
@@ -34,11 +35,16 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import static io.pravega.shared.metrics.ClientMetricKeys.CLIENT_OUTSTANDING_APPEND_COUNT;
+import static io.pravega.shared.segment.StreamSegmentNameUtils.writerTags;
+
 @Slf4j
 public class FlowHandler extends ChannelInboundHandlerAdapter implements AutoCloseable {
 
     private static final int FLOW_DISABLED = 0;
     private final String connectionName;
+    @Getter
+    private final MetricNotifier metricNotifier;
     private final AtomicReference<Channel> channel = new AtomicReference<>();
     private final AtomicReference<ScheduledFuture<?>> keepAliveFuture = new AtomicReference<>();
     private final AtomicBoolean recentMessage = new AtomicBoolean(false);
@@ -53,7 +59,12 @@ public class FlowHandler extends ChannelInboundHandlerAdapter implements AutoClo
     private final AtomicBoolean disableFlow = new AtomicBoolean(false);
 
     public FlowHandler(String connectionName) {
+        this(connectionName, MetricNotifier.NO_OP_METRIC_NOTIFIER);
+    }
+
+    public FlowHandler(String connectionName, MetricNotifier updateMetric) {
         this.connectionName = connectionName;
+        this.metricNotifier = updateMetric;
     }
 
     /**
@@ -240,9 +251,13 @@ public class FlowHandler extends ChannelInboundHandlerAdapter implements AutoClo
             if (batchSizeTracker != null) {
                 Optional<ReplyProcessor> rp = getReplyProcessor(cmd);
                 if (rp.isPresent()) {
-                    batchSizeTracker.recordAck(dataAppended.getEventNumber(), rp.get().getSegment());
+                    long pendingAckCount = batchSizeTracker.recordAck(dataAppended.getEventNumber(), rp.get().getSegment());
+                    metricNotifier.updateSuccessMetric(CLIENT_OUTSTANDING_APPEND_COUNT, writerTags(dataAppended.getWriterId().toString()),
+                                                       pendingAckCount);
                 } else {
-                    batchSizeTracker.recordAck(dataAppended.getEventNumber(), "");
+                   long pendingAckCount = batchSizeTracker.recordAck(dataAppended.getEventNumber(), "");
+                    metricNotifier.updateSuccessMetric(CLIENT_OUTSTANDING_APPEND_COUNT, writerTags(dataAppended.getWriterId().toString()),
+                                                       pendingAckCount);
                 }
             }
         }

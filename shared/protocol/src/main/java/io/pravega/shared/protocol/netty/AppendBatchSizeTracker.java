@@ -26,7 +26,7 @@ public interface AppendBatchSizeTracker {
      * @param eventNumber the number of the last event.
      * @param segment Segment name.
      */
-    void recordAck(long eventNumber, String segment);
+    long recordAck(long eventNumber, String segment);
 
     /**
      * Returns the size that should be used for the next append block.
