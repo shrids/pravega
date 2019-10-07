@@ -202,7 +202,7 @@ public class CommandEncoder extends MessageToByteEncoder<Object> {
                     appendTracker.apply(append.getFlowId());
 
             if (blockSizeSupplier != null) {
-                blockSizeSupplier.recordAppend(append.getEventNumber(), data.readableBytes());
+                blockSizeSupplier.recordAppend(append.getEventNumber(), data.readableBytes(), append.getSegment());
             }
 
             if (isChannelFree()) {

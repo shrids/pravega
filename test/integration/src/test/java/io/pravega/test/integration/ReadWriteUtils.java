@@ -82,7 +82,7 @@ public final class ReadWriteUtils {
                 EventWriterConfig.builder().build());
         String tenByte = "1234567890"; // 10 bytes
         StringBuffer buf = new StringBuffer();
-        for (int i = 0; i < 10; i ++) {
+        for (int i = 0; i < 10; i++) {
             buf.append(tenByte);
         }
 
