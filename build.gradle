@@ -70,6 +70,12 @@ allprojects {
             }
         }
     }
+    idea {
+        module {
+            downloadJavadoc = true
+            downloadSources = true
+        }
+    }
     // Plugin configurations
     apply from: "$rootDir/gradle/application.gradle"
     apply from: "$rootDir/gradle/checkstyle.gradle"

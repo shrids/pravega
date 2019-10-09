@@ -29,6 +29,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.SslHandler;
@@ -254,6 +255,7 @@ public class ConnectionPoolImpl implements ConnectionPool {
                 p.addLast(
                         // if read is happening then flushes consolidated until the reads are complete.
                         // if not read is happening then an flush() will cause an explicity flush per flush to improve latency.
+                        new LoggingHandler(),
                         new ExceptionLoggingHandler(location.getEndpoint()),
                         new CommandEncoder(handler::getAppendBatchSizeTracker, metricNotifier),
                         new LengthFieldBasedFrameDecoder(WireCommands.MAX_WIRECOMMAND_SIZE, 4, 4),
