@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @ToString
-class EventSegmentReaderImpl implements EventSegmentReader {
+public class EventSegmentReaderImpl implements EventSegmentReader {
 
     @GuardedBy("$lock")
     private final ByteBuffer headerReadingBuffer = ByteBuffer.allocate(WireCommands.TYPE_PLUS_LENGTH_SIZE);
