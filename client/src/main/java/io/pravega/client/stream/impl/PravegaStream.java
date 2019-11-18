@@ -6,6 +6,7 @@ import io.pravega.client.ClientConfig;
 import io.pravega.client.batch.SegmentIterator;
 import io.pravega.client.batch.SegmentRange;
 import io.pravega.client.batch.StreamSegmentsIterator;
+import io.pravega.client.stream.Serializer;
 import io.pravega.client.stream.Stream;
 import io.pravega.client.stream.StreamCut;
 import java.util.Spliterator;
@@ -32,18 +33,23 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
         this.segmentRanges = Lists.newArrayList(segIterator.getIterator()).toArray(new SegmentRange[0]);
     }
 
-    private Spliterator<byte[]> spliterator() {
-        return new PravegaSplitIterator(segmentRanges, 0, segmentRanges.length);
+    /**
+     * Get Byte Stream.
+     * @return A Java stream corresponding to a Pravega Stream.
+     */
+    public java.util.stream.Stream<byte[]> getByteStream() {
+        return getEventStream(new ByteArraySerializer());
     }
 
     /**
-     * Get Byte Stream.
-     * @return
+     * Get EventStream.
+     * @param serializer Serializer that can be used to deserialize data
+     * @param <T> Event type.
+     * @return A Java stream corresponding to a Pravega Stream.
      */
-    public java.util.stream.Stream<byte[]> getByteStream() {
-        // TODO: experiment with parallel flag set as true.
-        Spliterator<byte[]> itr = spliterator();
-        return StreamSupport.<byte[]>stream(itr, false);
+    public <T> java.util.stream.Stream<T> getEventStream(Serializer<T> serializer) {
+        Spliterator<T> itr = new PravegaSplitIterator(segmentRanges, 0, segmentRanges.length, serializer);
+        return StreamSupport.<T>stream(itr, false);
     }
 
     @Override
@@ -51,32 +57,34 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
         bf.close();
     }
 
-    // This split iterator does not ensure ordering guarantees. (A newer splitIterator which ensures ordering guarantees can also be
-    // created).
-    private class PravegaSplitIterator implements Spliterator<byte[]> {
+
+    private class PravegaSplitIterator<T> implements Spliterator<T> {
+        private final Serializer<T> serializer;
         private final SegmentRange[] segmentRanges;
         private int index;
         private int fence;
-        private AtomicReference<SegmentIterator<byte[]>> ref = new AtomicReference<>();
+        private AtomicReference<SegmentIterator<T>> ref = new AtomicReference<>();
 
-        PravegaSplitIterator(SegmentRange[] array, int origin, int fence) {
+
+        PravegaSplitIterator(SegmentRange[] array, int origin, int fence, Serializer<T> serializer) {
             this.segmentRanges = array;
             this.index = origin;
             this.fence = fence;
+            this.serializer = serializer;
         }
 
         @Override
-        public boolean tryAdvance(Consumer<? super byte[]> action) {
+        public boolean tryAdvance(Consumer<? super T> action) {
             // return true if there are elements to be read.
-            final UnaryOperator<SegmentIterator<byte[]>> createSegmentItr = itr -> {
+            final UnaryOperator<SegmentIterator<T>> createSegmentItr = itr -> {
                 if (itr == null) {
-                    return bf.readSegment(segmentRanges[index], new ByteArraySerializer());
+                    return bf.readSegment(segmentRanges[index], serializer);
                 }
                 return itr;
             };
 
             if ((index < fence) && ref.updateAndGet(createSegmentItr).hasNext()) {
-                byte[] data = ref.get().next();
+                T data = ref.get().next();
                 action.accept(data);
                 return true;
             } else if (index < fence) { // there are other segments to be read from update the index.
@@ -90,16 +98,16 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
         }
 
         private void closeSegmentReaderIfPresent() {
-            SegmentIterator<byte[]> itr = ref.getAndSet(null);
+            SegmentIterator<T> itr = ref.getAndSet(null);
             if (itr != null)
                 itr.close();
         }
 
         @Override
-        public Spliterator<byte[]> trySplit() {
+        public Spliterator<T> trySplit() {
             int lo = index, mid = (lo + fence) >>> 1;
             return (lo >= mid) ? null :
-                    new PravegaSplitIterator(segmentRanges, mid, fence); // ordering is not maintained.
+                    new PravegaSplitIterator(segmentRanges, mid, fence, serializer); // ordering is not maintained.
         }
 
         @Override
@@ -110,7 +118,7 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
         @Override
         public int characteristics() {
             // TODO: experiment with other options.
-            return IMMUTABLE | SUBSIZED ;
+            return IMMUTABLE | SUBSIZED;
         }
     }
 }
