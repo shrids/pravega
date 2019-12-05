@@ -95,6 +95,8 @@ function init_cluster() {
     if [ $? -eq 0 ]; then
         echo "Metadata of cluster already exists, no need format"
     else
+        echo "Sleep for a random time"
+        sleep $[ ( $RANDOM % 10 )  + 1 ]s
         # create ephemeral zk node bkInitLock, initiator who this node, then do init; other initiators will wait.
         lock=`zk-shell --run-once "create ${BK_CLUSTER_ROOT_PATH}/bkInitLock1 '' true false false" ${BK_zkServers}`
         echo "output of zk-shell create bkInitLock"
