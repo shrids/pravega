@@ -8,7 +8,7 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
-# set -e
+set -e
 
 BOOKIE_PORT=${bookiePort:-${BOOKIE_PORT}}
 BOOKIE_PORT=${BOOKIE_PORT:-3181}
@@ -96,7 +96,9 @@ function init_cluster() {
         echo "Metadata of cluster already exists, no need format"
     else
         # create ephemeral zk node bkInitLock, initiator who this node, then do init; other initiators will wait.
-        lock=$(zk-shell --run-once "create ${BK_CLUSTER_ROOT_PATH}/bkInitLock '' true false false" ${BK_zkServers})
+        lock=`zk-shell --run-once "create ${BK_CLUSTER_ROOT_PATH}/bkInitLock '' true false false" ${BK_zkServers}`
+        echo "output of zk-shell create bkInitLock"
+        echo $lock
         if [ -z "$lock" ]; then
             # bkInitLock created success, this is the successor to do znode init
             echo "Bookkeeper znodes not exist in Zookeeper, do the init to create them."
