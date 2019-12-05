@@ -12,6 +12,7 @@
 
 BOOKIE_PORT=${bookiePort:-${BOOKIE_PORT}}
 BOOKIE_PORT=${BOOKIE_PORT:-3181}
+BOOKIE_HTTP_PORT=${BOOKIE_HTTP_PORT:-9090}
 BK_zkServers=$(echo "${ZK_URL:-127.0.0.1:2181}" | sed -r 's/;/,/g')
 ZK_URL=$(echo "${ZK_URL:-127.0.0.1:2181}" | sed -r 's/,/;/g')
 PRAVEGA_PATH=${PRAVEGA_PATH:-"pravega"}
@@ -19,6 +20,14 @@ PRAVEGA_CLUSTER_NAME=${PRAVEGA_CLUSTER_NAME:-"pravega-cluster"}
 BK_CLUSTER_NAME=${BK_CLUSTER_NAME:-"bookkeeper"}
 BK_LEDGERS_PATH="/${PRAVEGA_PATH}/${PRAVEGA_CLUSTER_NAME}/${BK_CLUSTER_NAME}/ledgers"
 BK_DIR="/bk"
+
+export PATH=$PATH:/opt/bookkeeper/bin
+export JAVA_HOME=/usr/lib/jvm/jre-1.8.0
+
+BK_HOME=/opt/bookkeeper
+BINDIR=${BK_HOME}/bin
+BOOKKEEPER=${BINDIR}/bookkeeper
+SCRIPTS_DIR=${BK_HOME}/scripts
 
 BK_zkLedgersRootPath=${BK_LEDGERS_PATH}
 export BK_zkLedgersRootPath=${BK_LEDGERS_PATH}
@@ -40,6 +49,7 @@ export BK_tlsTrustStoreType=JKS
 export BK_tlsTrustStore=/var/private/tls/bookie.truststore.jks
 export BK_tlsTrustStorePasswordPath=/var/private/tls/bookie.truststore.passwd
 
+source ${SCRIPTS_DIR}/common.sh
 
 # To create directories for multiple ledgers and journals if specified
 create_bookie_dirs() {
@@ -74,7 +84,8 @@ configure_bk() {
     if [ ! -z "$BK_useHostNameAsBookieID" ]; then
       sed -i "s|.*useHostNameAsBookieID=.*\$|useHostNameAsBookieID=${BK_useHostNameAsBookieID}|" ${BK_HOME}/conf/bk_server.conf
     fi
-    sed -i "s|.*bookiePort=.*\$|bookiePort=${BOOKIE_PORT}|" ${BK_HOME}/conf/bk_server.conf
+    # this has been newly added as BOOKIE_PORT is not being read.
+    # sed -i "s|.*bookiePort=.*\$|bookiePort=${BOOKIE_PORT}|" ${BK_HOME}/conf/bk_server.conf
 }
 
 # Init the cluster if required znodes not exist in Zookeeper.
@@ -132,6 +143,19 @@ echo "Creating Zookeeper root"
 create_zk_root
 
 configure_bk
+
+if [ `find $BK_journalDirectory $BK_ledgerDirectories $BK_indexDirectories -type f 2> /dev/null | wc -l` -gt 0 ]; then
+  # The container already contains data in BK directories. This is probably because
+  # the container has been restarted; or, if running on Kubernetes, it has probably been
+  # updated or evacuated without losing its persistent volumes.
+  echo "data available in bookkeeper directories; not formatting the bookie"
+else
+  # The container does not contain any BK data, it is probably a new
+  # bookie. We will format any pre-existent data and metadata before starting
+  # the bookie to avoid potential conflicts.
+  echo "format bookie data and metadata"
+  /opt/bookkeeper/bin/bookkeeper shell bookieformat -nonInteractive -force -deleteCookie
+fi
 
 echo "Initializing Cluster"
 init_cluster
