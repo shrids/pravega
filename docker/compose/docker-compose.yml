@@ -29,10 +29,10 @@ services:
       HDFS_HOST: ${HOST_IP}
 
   bookie1:
-    image: pravega/bookkeeper:0.7.0-2436.7883d08-SNAPSHOT
+    image: pravega/bookkeeper:0.7.0-2438.4b23bf0-SNAPSHOT
     ports:
       - "3181:3181"
-    restart: always
+    #restart: always
     environment:
       ZK_URL: zookeeper:2181
       bookiePort: 3181
@@ -40,10 +40,10 @@ services:
       - zookeeper
 
   bookie2:
-      image: pravega/bookkeeper:0.7.0-2436.7883d08-SNAPSHOT
+      image: pravega/bookkeeper:0.7.0-2438.4b23bf0-SNAPSHOT
       ports:
         - "3182:3182"
-      restart: always
+      #restart: always
       environment:
         ZK_URL: zookeeper:2181
         bookiePort: 3182
@@ -51,10 +51,10 @@ services:
         - zookeeper
 
   bookie3:
-      image: pravega/bookkeeper:0.7.0-2436.7883d08-SNAPSHOT
+      image: pravega/bookkeeper:0.7.0-2438.4b23bf0-SNAPSHOT
       ports:
         - "3183:3183"
-      restart: always
+      #restart: always
       environment:
         ZK_URL: zookeeper:2181
         bookiePort: 3183
@@ -62,7 +62,7 @@ services:
         - zookeeper
 
   controller:
-    image: pravega/pravega:0.7.0-2436.7883d08-SNAPSHOT
+    image: pravega/pravega:0.7.0-2438.4b23bf0-SNAPSHOT
     ports:
       - "9090:9090"
       - "10080:10080"
@@ -84,7 +84,7 @@ services:
       - zookeeper
 
   segmentstore:
-    image: pravega/pravega:0.7.0-2436.7883d08-SNAPSHOT
+    image: pravega/pravega:0.7.0-2438.4b23bf0-SNAPSHOT
     ports:
       - "12345:12345"
     command: segmentstore
