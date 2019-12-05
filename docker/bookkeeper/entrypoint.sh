@@ -96,8 +96,8 @@ function init_cluster() {
         echo "Metadata of cluster already exists, no need format"
     else
         # create ephemeral zk node bkInitLock, initiator who this node, then do init; other initiators will wait.
-        zk-shell --run-once "create ${BK_CLUSTER_ROOT_PATH}/bkInitLock '' true false false" ${BK_zkServers}
-        if [ $? -eq 0 ]; then
+        lock=$(zk-shell --run-once "create ${BK_CLUSTER_ROOT_PATH}/bkInitLock '' true false false" ${BK_zkServers})
+        if [ -z "$lock" ]; then
             # bkInitLock created success, this is the successor to do znode init
             echo "Bookkeeper znodes not exist in Zookeeper, do the init to create them."
             /opt/bookkeeper/bin/bookkeeper shell initnewcluster
