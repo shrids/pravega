@@ -109,12 +109,13 @@ function init_cluster() {
                 echo "Bookkeeper znodes init success."
             else
                 echo "Bookkeeper znodes init failed. please check the reason."
+                sleep 1000
                 exit
             fi
         else
             echo "Other docker instance is doing initialize at the same time, will wait in this instance."
             tenSeconds=1
-            while [ ${tenSeconds} -lt 10 ]
+            while [ ${tenSeconds} -lt 1000 ]
             do
                 sleep 10
                 zk-shell --run-once "ls ${BK_zkLedgersRootPath}/available/readonly" ${BK_zkServers}
@@ -128,7 +129,7 @@ function init_cluster() {
                 fi
             done
 
-            if [ ${tenSeconds} -eq 10 ]; then
+            if [ ${tenSeconds} -eq 1000 ]; then
                 echo "Waited 100 seconds for bookkeeper cluster init, something wrong, please check"
                 exit
             fi
