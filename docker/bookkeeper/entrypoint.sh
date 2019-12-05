@@ -108,6 +108,8 @@ function init_cluster() {
             if [ $? -eq 0 ]; then
                 echo "Bookkeeper znodes init success."
             else
+                echo "Exit status of initnewcluster"
+                echo $?
                 echo "Bookkeeper znodes init failed. please check the reason."
                 sleep 1000
                 exit
@@ -130,7 +132,7 @@ function init_cluster() {
             done
 
             if [ ${tenSeconds} -eq 1000 ]; then
-                echo "Waited 100 seconds for bookkeeper cluster init, something wrong, please check"
+                echo "Waited 1000 seconds for bookkeeper cluster init, something wrong, please check"
                 exit
             fi
         fi
