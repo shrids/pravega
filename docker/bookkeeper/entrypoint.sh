@@ -104,6 +104,7 @@ function init_cluster() {
         if [ -z "$lock" ]; then
             # bkInitLock created success, this is the successor to do znode init
             echo "Bookkeeper znodes not exist in Zookeeper, do the init to create them."
+            sleep 1h
             /opt/bookkeeper/bin/bookkeeper shell nukeexistingcluster -force
             /opt/bookkeeper/bin/bookkeeper shell initnewcluster
             if [ $? -eq 0 ]; then

@@ -10,7 +10,7 @@
 version: '2'
 services:
   zookeeper:
-    image: zookeeper:3.5.4-beta
+    image: zookeeper:3.5.5
     ports:
       - "2181:2181"
 
@@ -29,40 +29,62 @@ services:
       HDFS_HOST: ${HOST_IP}
 
   bookie1:
-    image: pravega/bookkeeper:0.7.0-2442.c35f35b-SNAPSHOT
+    image: pravega/bookkeeper:0.7.0-2443.4e3cbff-SNAPSHOT
     ports:
       - "3181:3181"
     #restart: always
     environment:
       ZK_URL: zookeeper:2181
       bookiePort: 3181
+      BK_AUTORECOVERY: "true"
+      BOOKIE_GC_LOGGING_OPTS: "-XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCApplicationStoppedTime -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=64m"
+      BK_useHostNameAsBookieID: "true"
+      BK_majorCompactionThreshold: 0.8
+      BK_majorCompactionInterval: 43200
+      BK_lostBookieRecoveryDelay: 60
+      BK_isForceGCAllowWhenNoSpace: "true"
     links:
       - zookeeper
 
   bookie2:
-      image: pravega/bookkeeper:0.7.0-2442.c35f35b-SNAPSHOT
+      image: pravega/bookkeeper:0.7.0-2443.4e3cbff-SNAPSHOT
       ports:
         - "3182:3182"
       #restart: always
       environment:
         ZK_URL: zookeeper:2181
         bookiePort: 3182
+        BK_AUTORECOVERY: "true"
+        BOOKIE_GC_LOGGING_OPTS: "-XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCApplicationStoppedTime -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=64m"
+        BK_useHostNameAsBookieID: "true"
+        BK_majorCompactionThreshold: 0.8
+        BK_majorCompactionInterval: 43200
+        BK_lostBookieRecoveryDelay: 60
+        BK_isForceGCAllowWhenNoSpace: "true"
       links:
         - zookeeper
 
   bookie3:
-      image: pravega/bookkeeper:0.7.0-2442.c35f35b-SNAPSHOT
+      image: pravega/bookkeeper:0.7.0-2443.4e3cbff-SNAPSHOT
       ports:
         - "3183:3183"
       #restart: always
       environment:
         ZK_URL: zookeeper:2181
         bookiePort: 3183
+        BK_AUTORECOVERY: "true"
+        BOOKIE_GC_LOGGING_OPTS: "-XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCApplicationStoppedTime -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=5 -XX:GCLogFileSize=64m"
+        BK_useHostNameAsBookieID: "true"
+        BK_majorCompactionThreshold: 0.8
+        BK_majorCompactionInterval: 43200
+        BK_lostBookieRecoveryDelay: 60
+        BK_isForceGCAllowWhenNoSpace: "true"
+
       links:
         - zookeeper
 
   controller:
-    image: pravega/pravega:0.7.0-2442.c35f35b-SNAPSHOT
+    image: pravega/pravega:0.7.0-2443.4e3cbff-SNAPSHOT
     ports:
       - "9090:9090"
       - "10080:10080"
@@ -84,7 +106,7 @@ services:
       - zookeeper
 
   segmentstore:
-    image: pravega/pravega:0.7.0-2442.c35f35b-SNAPSHOT
+    image: pravega/pravega:0.7.0-2443.4e3cbff-SNAPSHOT
     ports:
       - "12345:12345"
     command: segmentstore
