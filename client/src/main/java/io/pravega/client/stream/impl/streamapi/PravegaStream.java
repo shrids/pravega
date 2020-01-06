@@ -40,24 +40,22 @@ import java.util.stream.StreamSupport;
 @Slf4j
 public class PravegaStream extends StreamImpl implements AutoCloseable {
 
+    private final static int MAX_NULL_COUNT = 2;
+    private final static long READ_TIMEOUT = 5_000L;
+
     @Getter
     private final ClientConfig clientConfig;
     private final BatchClientFactory bf;
     private final EventStreamClientFactory cf;
-    private static int MAX_NULL_COUNT = 2;
-    private static long READ_TIMEOUT = 5_000L;
-
-    public static PravegaStream of(Stream stream, ClientConfig clientConfig) {
-        return new PravegaStream(stream.getScope(), stream.getStreamName(), clientConfig);
-    }
 
     /**
      * Creates a new instance of the Stream class.
      *
      * @param scope      The scope of the stream.
      * @param streamName The name of the stream.
+     * @param clientConfig The client configuration.
      */
-    public PravegaStream(String scope, String streamName, ClientConfig clientConfig) {
+    public PravegaStream(ClientConfig clientConfig, String scope, String streamName) {
         super(scope, streamName);
         this.clientConfig = clientConfig;
         this.bf = BatchClientFactory.withScope(scope, clientConfig);
@@ -126,7 +124,7 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
         public boolean tryAdvance(Consumer<? super T> action) {
             EventRead<T> eventRead = null;
             T data = null;
-            int retry_count = 0;
+            int retryCount = 0;
             do {
                 eventRead = reader.readNextEvent(READ_TIMEOUT);
                 if (eventRead.isCheckpoint()) {
@@ -138,10 +136,10 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
                     action.accept(data);
                     return true;
                 } else {
-                    retry_count++;
+                    retryCount++;
 
                 }
-            } while ((data == null) && (retry_count < MAX_NULL_COUNT));
+            } while ((data == null) && (retryCount < MAX_NULL_COUNT));
             return false;
         }
 
@@ -166,7 +164,7 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
 
         @Override
         public int characteristics() {
-            return IMMUTABLE ;
+            return IMMUTABLE;
         }
     }
 
@@ -214,8 +212,9 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
 
         private void closeSegmentReaderIfPresent() {
             SegmentIterator<T> itr = ref.getAndSet(null);
-            if (itr != null)
+            if (itr != null) {
                 itr.close();
+            }
         }
 
         @Override
@@ -224,11 +223,11 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
             if (high -lo <= 1) {
                 return null;
             }
-            int mid = lo + (high-lo)/2;
+            int mid = lo + (high-lo) / 2;
             int oldHigh = high;
             high = mid;
             log.debug("=> split decided  mid {}", mid);
-            return new PravegaSplitIterator<T>(segmentRanges, mid +1 , oldHigh, serializer); // ordering is not maintained.
+            return new PravegaSplitIterator<T>(segmentRanges, mid + 1, oldHigh, serializer); // ordering is not maintained.
         }
 
         @Override
@@ -240,7 +239,11 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
         @Override
         public int characteristics() {
             // TODO: experiment with other options.
-            return IMMUTABLE ;
+            return IMMUTABLE;
         }
     }
+
+    //    public static PravegaStream of(Stream stream, ClientConfig clientConfig) {
+    //        return new PravegaStream(clientConfig, stream.getScope(), stream.getStreamName());
+    //    }
 }
