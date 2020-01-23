@@ -26,6 +26,7 @@ import io.pravega.client.stream.Stream;
 import io.pravega.client.stream.StreamCut;
 import io.pravega.client.stream.impl.ByteArraySerializer;
 import io.pravega.client.stream.impl.StreamImpl;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -38,6 +39,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.StreamSupport;
 
 @Slf4j
+@EqualsAndHashCode(callSuper = true)
 public class PravegaStream extends StreamImpl implements AutoCloseable {
 
     private final static int MAX_NULL_COUNT = 2;
@@ -137,9 +139,8 @@ public class PravegaStream extends StreamImpl implements AutoCloseable {
                     return true;
                 } else {
                     retryCount++;
-
                 }
-            } while ((data == null) && (retryCount < MAX_NULL_COUNT));
+            } while (retryCount < MAX_NULL_COUNT);
             return false;
         }
 

@@ -87,7 +87,7 @@ public class TestPravegaStream {
         createAndWriteToStream(controllerURI, clientConfig, scope, stream);
 
         PravegaStream str = new PravegaStream(clientConfig, scope, stream);
-        // obtain a java.util.stream.Stream of bytes[]
+        // obtain a java.util.stream.Stream of Pravega events. Here the event is of type String.
         Stream<String> eventStream = str.getUnorderedEventStream(new UTF8StringSerializer());
         //All aggregate options (map, flatMap, filter ...) supported by normal Java stream can be supported.
         Map<String, Long> result = eventStream
@@ -208,23 +208,26 @@ public class TestPravegaStream {
         // Step 1
         createAndWriteToStream(controllerURI, clientConfig, scope, stream);
 
-        PravegaStream str = new PravegaStream(clientConfig, scope, stream);
+        PravegaStream dataStream = new PravegaStream(clientConfig, scope, stream);
+        // Pravega Stream which contains the processed data.
         PravegaStream outputStream = new PravegaStream(clientConfig, scope, stream + "result");
         UTF8StringSerializer serializer = new UTF8StringSerializer();
 
-        PravegaStream filteredStream = str.getOrderedEventStream(serializer)
-                                          .peek(s -> System.out.println(s))
-                                          .filter(s -> s.contains("event-0") || s.contains("event-1"))
-                                          .collect(new PravegaStreamCollector<>(outputStream, s -> s.split("-")[1],
-                                                  serializer, StreamConfiguration.builder().build()));
+        dataStream.getOrderedEventStream(serializer)
+           .peek(s -> System.out.println(s))
+           .filter(s -> s.contains("event-0") || s.contains("event-1"))
+           // the routing key is based on the event number.
+           .collect(new PravegaStreamCollector<>(outputStream, s -> s.split("-")[1],
+                   serializer, StreamConfiguration.builder().build()));
 
         // Verification
-        assertEquals("Expected to read 100 events of type event-0 and event-1", 200L, filteredStream.getUnorderedEventStream(serializer)
-                                                                                                    .count());
+        assertEquals("Expected to read 100 events of type event-0 and event-1", 200L, outputStream
+                .getUnorderedEventStream(serializer)
+                .count());
 
-        Map<String, Long> result = filteredStream.getUnorderedEventStream(serializer)
-                                                 .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()
-                                                 ));
+        Map<String, Long> result = outputStream.getUnorderedEventStream(serializer)
+                                               .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()
+                                               ));
         assertNull(result.get("event-2"));
         assertNull(result.get("event-3"));
         assertNull(result.get("event-3"));
