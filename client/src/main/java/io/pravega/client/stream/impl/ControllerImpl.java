@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2017 Dell Inc., or its subsidiaries. All Rights Reserved.
+ * Copyright (c) Dell Inc., or its subsidiaries. All Rights Reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,7 +142,7 @@ public class ControllerImpl implements Controller {
     public ControllerImpl(final ControllerImplConfig config,
                           final ScheduledExecutorService executor) {
         this(NettyChannelBuilder.forTarget(config.getClientConfig().getControllerURI().toString())
-                                .nameResolverFactory(new ControllerResolverFactory())
+                                .nameResolverFactory(new ControllerResolverFactory(executor))
                                 .loadBalancerFactory(LoadBalancerRegistry.getDefaultRegistry().getProvider("round_robin"))
                                 .keepAliveTime(DEFAULT_KEEPALIVE_TIME_MINUTES, TimeUnit.MINUTES),
                 config, executor);
@@ -186,14 +186,24 @@ public class ControllerImpl implements Controller {
 
         // Create Async RPC client.
         this.channel = channelBuilder.build();
-        ControllerServiceStub client = ControllerServiceGrpc.newStub(this.channel);
-        Credentials credentials = config.getClientConfig().getCredentials();
-        if (credentials != null) {
-            PravegaCredentialsWrapper wrapper = new PravegaCredentialsWrapper(credentials);
-            client = client.withCallCredentials(MoreCallCredentials.from(wrapper));
-        }
-        this.client = client;
+        this.client = getClientWithCredentials(config);
         this.timeoutMillis = config.getTimeoutMillis();
+    }
+
+    private ControllerServiceStub getClientWithCredentials(ControllerImplConfig config) {
+        ControllerServiceStub client = ControllerServiceGrpc.newStub(this.channel);
+        try {
+            Credentials credentials = config.getClientConfig().getCredentials();
+            if (credentials != null) {
+                PravegaCredentialsWrapper wrapper = new PravegaCredentialsWrapper(credentials);
+                client = client.withCallCredentials(MoreCallCredentials.from(wrapper));
+            }
+        } catch (Exception e) {
+            log.error("Error while setting credentials to controller client", e);
+            closeChannel();
+            throw e;
+        }
+        return client;
     }
 
     @SuppressWarnings("checkstyle:ReturnCount")
@@ -263,7 +273,7 @@ public class ControllerImpl implements Controller {
                 }
             }).whenComplete((x, e) -> {
                 if (e != null) {
-                    log.warn(requestId, "createScope failed: ", e);
+                    log.warn(requestId, "createScope {} failed: ", scopeName, e);
                 }
                 LoggerHelpers.traceLeave(log, "createScope", traceId, scopeName, requestId);
             });
@@ -340,7 +350,7 @@ public class ControllerImpl implements Controller {
                 }
             }).whenComplete((x, e) -> {
                 if (e != null) {
-                    log.warn(requestId, "deleteScope failed: ", e);
+                    log.warn(requestId, "deleteScope {} failed: ", scopeName, e);
                 }
                 LoggerHelpers.traceLeave(log, "deleteScope", traceId, scopeName, requestId);
             });
@@ -384,7 +394,7 @@ public class ControllerImpl implements Controller {
             }
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn(requestId, "createStream failed: ", e);
+                log.warn(requestId, "createStream {}/{} failed: ", scope, streamName, e);
             }
             LoggerHelpers.traceLeave(log, "createStream", traceId, streamConfig, requestId);
         });
@@ -424,7 +434,7 @@ public class ControllerImpl implements Controller {
             }
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn(requestId, "updateStream failed: ", e);
+                log.warn(requestId, "updateStream {}/{} failed: ", scope, streamName, e);
             }
             LoggerHelpers.traceLeave(log, "updateStream", traceId, streamConfig, requestId);
         });
@@ -468,7 +478,7 @@ public class ControllerImpl implements Controller {
             }
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn(requestId, "truncateStream failed: ", e);
+                log.warn(requestId, "truncateStream {}/{} failed: ", scope, stream, e);
             }
             LoggerHelpers.traceLeave(log, "truncateStream", traceId, streamCut, requestId);
         });
@@ -485,7 +495,7 @@ public class ControllerImpl implements Controller {
         startScaleInternal(stream, sealedSegments, newKeyRanges, "scaleStream", requestId)
                 .whenComplete((startScaleResponse, e) -> {
                     if (e != null) {
-                        log.error(requestId, "failed to start scale {}", e);
+                        log.error(requestId, "Failed to start scale for stream {}", stream, e);
                         cancellableRequest.start(() -> Futures.failedFuture(e), any -> true, executor);
                     } else {
                         try {
@@ -499,6 +509,7 @@ public class ControllerImpl implements Controller {
                             }, isDone -> !started || isDone, executor);
                             LoggerHelpers.traceLeave(log, "scaleStream", traceId, stream, requestId);
                         } catch (Exception ex) {
+                            log.warn(requestId, "Failed to handle scale response: ", ex);
                             cancellableRequest.start(() -> Futures.failedFuture(ex), any -> true, executor);
                         }
                     }
@@ -517,7 +528,7 @@ public class ControllerImpl implements Controller {
                 .thenApply(response -> handleScaleResponse(stream, response, traceId))
                 .whenComplete((x, e) -> {
                     if (e != null) {
-                        log.warn(requestId, "scaleStream failed: ", e);
+                        log.warn(requestId, "Failed to start scale of stream: {} ", stream.getStreamName(), e);
                     }
                     LoggerHelpers.traceLeave(log, "scaleStream", traceId, stream, requestId);
                 });
@@ -563,14 +574,16 @@ public class ControllerImpl implements Controller {
                 case SUCCESS:
                     return true;
                 case INVALID_INPUT:
+                    log.warn("Failed to check scale status of stream " + stream.getStreamName() + " because of invalid input");
                     throw new ControllerFailureException("invalid input");
                 case INTERNAL_ERROR:
                 default:
-                    throw new ControllerFailureException("unknown error");
+                    throw new ControllerFailureException("Unknown return status checking scale of stream "  + stream + " "
+                            + response.getStatus());
             }
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn("checking status failed: ", e);
+                log.warn("checkScaleStatus {} failed: ", stream.getStreamName(), e);
             }
             LoggerHelpers.traceLeave(log, "checkScale", traceId);
         });
@@ -637,7 +650,7 @@ public class ControllerImpl implements Controller {
             }
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn(requestId, "sealStream failed: ", e);
+                log.warn(requestId, "sealStream {}/{} failed: ", scope, streamName, e);
             }
             LoggerHelpers.traceLeave(log, "sealStream", traceId, scope, streamName, requestId);
         });
@@ -677,7 +690,7 @@ public class ControllerImpl implements Controller {
             }
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn(requestId, "deleteStream failed: ", e);
+                log.warn(requestId, "deleteStream {}/{} failed: ", scope, streamName, e);
             }
             LoggerHelpers.traceLeave(log, "deleteStream", traceId, scope, streamName, requestId);
         });
@@ -707,7 +720,7 @@ public class ControllerImpl implements Controller {
                                                      location -> location.getOffset()));
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn("getSegmentsAtTime failed: ", e);
+                log.warn("get Segments of {} at time {} failed: ", stream.getStreamName(), timestamp,  e);
             }
             LoggerHelpers.traceLeave(log, "getSegmentsAtTime", traceId);
         });
@@ -733,7 +746,7 @@ public class ControllerImpl implements Controller {
             return new StreamSegmentsWithPredecessors(result, successors.getDelegationToken());
         }).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn("getSuccessors failed: ", e);
+                log.warn("getSuccessors of segment {} failed: ", segment.getSegmentId(), e);
             }
             LoggerHelpers.traceLeave(log, "getSuccessors", traceId);
         });
@@ -747,7 +760,7 @@ public class ControllerImpl implements Controller {
 
         return getSegmentsBetweenStreamCuts(from, StreamCut.UNBOUNDED).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn("getSuccessors failed: ", e);
+                log.warn("getSuccessorsFromCut for {} failed: ", stream.getStreamName(), e);
             }
             LoggerHelpers.traceLeave(log, "getSuccessors", traceId);
         });
@@ -766,7 +779,7 @@ public class ControllerImpl implements Controller {
 
         return getSegmentsBetweenStreamCuts(fromStreamCut, toStreamCut).whenComplete((x, e) -> {
             if (e != null) {
-                log.warn("getSuccessors failed: ", e);
+                log.warn("getSegments for {} failed: ", stream.getStreamName(), e);
             }
             LoggerHelpers.traceLeave(log, "getSuccessors", traceId);
         });
@@ -826,7 +839,7 @@ public class ControllerImpl implements Controller {
             return new StreamSegments(rangeMap, ranges.getDelegationToken());
         }).whenComplete((x, e) -> {
                          if (e != null) {
-                             log.warn("getCurrentSegments failed: ", e);
+                             log.warn("getCurrentSegments for {}/{} failed: ", scope, stream, e);
                          }
                          LoggerHelpers.traceLeave(log, "getCurrentSegments", traceId);
                      });
@@ -851,7 +864,7 @@ public class ControllerImpl implements Controller {
         return result.thenApply(ModelHelper::encode)
                 .whenComplete((x, e) -> {
                     if (e != null) {
-                        log.warn("getEndpointForSegment failed: ", e);
+                        log.warn("getEndpointForSegment {} failed: ", qualifiedSegmentName, e);
                     }
                     LoggerHelpers.traceLeave(log, "getEndpointForSegment", traceId);
                 });
@@ -873,7 +886,7 @@ public class ControllerImpl implements Controller {
         return result.thenApply(SegmentValidityResponse::getResponse)
                 .whenComplete((x, e) -> {
                     if (e != null) {
-                        log.warn("isSegmentOpen failed: ", e);
+                        log.warn("isSegmentOpen for segment {} failed: ", segment, e);
                     }
                     LoggerHelpers.traceLeave(log, "isSegmentOpen", traceId);
                 });
@@ -898,7 +911,7 @@ public class ControllerImpl implements Controller {
         return result.thenApply(this::convert)
                 .whenComplete((x, e) -> {
                     if (e != null) {
-                        log.warn("createTransaction failed: ", e);
+                        log.warn("createTransaction on stream {} failed: ", stream.getStreamName(), e);
                     }
                     LoggerHelpers.traceLeave(log, "createTransaction", traceId);
                 });
@@ -936,7 +949,7 @@ public class ControllerImpl implements Controller {
             }
         }).whenComplete((s, e) -> {
             if (e != null) {
-                log.warn("Ping Transaction failed:", e);
+                log.warn("PingTransaction {} failed:", txId, e);
             }
             LoggerHelpers.traceLeave(log, "pingTransaction", traceId);
         });
@@ -966,9 +979,11 @@ public class ControllerImpl implements Controller {
         }, this.executor);
         return result.thenApply(txnStatus -> {
             if (txnStatus.getStatus().equals(TxnStatus.Status.STREAM_NOT_FOUND)) {
+                log.warn("Stream not found: {}", stream.getStreamName());
                 throw new InvalidStreamException("Stream no longer exists: " + stream);
             }
             if (txnStatus.getStatus().equals(TxnStatus.Status.TRANSACTION_NOT_FOUND)) {
+                log.warn("transaction not found: {}", txId);
                 throw Exceptions.sneakyThrow(new TxnFailedException("Transaction was already either committed or aborted"));
             }
             if (txnStatus.getStatus().equals(TxnStatus.Status.SUCCESS)) {                
@@ -999,9 +1014,11 @@ public class ControllerImpl implements Controller {
         return result.thenApply(txnStatus -> {
             LoggerHelpers.traceLeave(log, "abortTransaction", traceId);
             if (txnStatus.getStatus().equals(TxnStatus.Status.STREAM_NOT_FOUND)) {
+                log.warn("Stream not found: {}", stream.getStreamName());
                 throw new InvalidStreamException("Stream no longer exists: " + stream);
             }
             if (txnStatus.getStatus().equals(TxnStatus.Status.TRANSACTION_NOT_FOUND)) {
+                log.warn("transaction not found: {}", txId);
                 throw Exceptions.sneakyThrow(new TxnFailedException("Transaction was already either committed or aborted"));
             }
             if (txnStatus.getStatus().equals(TxnStatus.Status.SUCCESS)) {                
@@ -1032,7 +1049,7 @@ public class ControllerImpl implements Controller {
         return result.thenApply(status -> ModelHelper.encode(status.getState(), stream + " " + txId))
                 .whenComplete((x, e) -> {
                     if (e != null) {
-                        log.warn("checkTransactionStatus failed: ", e);
+                        log.warn("checkTransactionStatus on " + stream + " " + txId + " failed: ", e);
                     }
                     LoggerHelpers.traceLeave(log, "checkTransactionStatus", traceId);
                 });
@@ -1088,7 +1105,8 @@ public class ControllerImpl implements Controller {
             if (response.getResult().equals(RemoveWriterResponse.Status.SUCCESS)) {
                 return null;
             }
-            log.warn("Notifying the controller of writer shutdown failed for writer: " + writerId + " because of " + response.getResult());
+            log.warn("Notifying the controller of writer shutdown failed for writer: " + writerId + " because of "
+                    + response.getResult());
             throw new RuntimeException("Unable to remove writer due to: " + response.getResult());
         });
     }
@@ -1096,8 +1114,16 @@ public class ControllerImpl implements Controller {
     @Override
     public void close() {
         if (!closed.getAndSet(true)) {
-            this.channel.shutdownNow(); // Initiates a shutdown of channel.
+            closeChannel();
         }
+    }
+
+    private void closeChannel() {
+        this.channel.shutdownNow(); // Initiates a shutdown of channel. Although forceful, the shutdown is not instantaneous.
+        Exceptions.handleInterrupted(() -> {
+            boolean shutdownStatus = channel.awaitTermination(10, TimeUnit.SECONDS);
+            log.debug("Controller client shutdown has been initiated. Channel status: channel.isTerminated():{}", shutdownStatus);
+        });
     }
 
     @Override
@@ -1117,7 +1143,7 @@ public class ControllerImpl implements Controller {
         return result.thenApply( token -> token.getDelegationToken())
         .whenComplete((x, e) -> {
             if (e != null) {
-                log.warn("getOrRefreshDelegationTokenFor failed: ", e);
+                log.warn("getOrRefreshDelegationTokenFor {}/{} failed: ", scope, streamName, e);
             }
             LoggerHelpers.traceLeave(log, "getOrRefreshDelegationTokenFor", traceId);
         });
