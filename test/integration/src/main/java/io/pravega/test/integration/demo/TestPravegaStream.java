@@ -330,7 +330,6 @@ public class TestPravegaStream {
                                                                                         .put("1.0", "4")
                                                                                         .build();
 
-
         EventStreamClientFactory cf = EventStreamClientFactory.withScope(stream.getScope(), clientConfig);
         ScheduledExecutorService controlerExecutor = ExecutorServiceHelpers.newScheduledThreadPool(2, "controller-client");
         ControllerImpl controller = new ControllerImpl(ControllerImplConfig.builder()
