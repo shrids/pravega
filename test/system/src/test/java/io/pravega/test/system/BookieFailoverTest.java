@@ -24,7 +24,6 @@ import io.pravega.common.concurrent.ExecutorServiceHelpers;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.common.hash.RandomFactory;
 import io.pravega.test.system.framework.Environment;
-import io.pravega.test.system.framework.SystemTestRunner;
 import io.pravega.test.system.framework.Utils;
 import io.pravega.test.system.framework.services.Service;
 import java.net.URI;
@@ -36,15 +35,16 @@ import mesosphere.marathon.client.MarathonException;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
 
 import static org.junit.Assert.assertTrue;
 
 @Slf4j
-@RunWith(SystemTestRunner.class)
+@Ignore
+//@RunWith(SystemTestRunner.class)
 public class BookieFailoverTest extends AbstractFailoverTests  {
 
     private static final String STREAM = "testBookieFailoverStream";

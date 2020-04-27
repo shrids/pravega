@@ -21,7 +21,6 @@ import io.pravega.common.concurrent.ExecutorServiceHelpers;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.common.util.Retry;
 import io.pravega.test.system.framework.Environment;
-import io.pravega.test.system.framework.SystemTestRunner;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
@@ -36,15 +35,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
 
 import static org.junit.Assert.assertTrue;
 
 @Slf4j
-@RunWith(SystemTestRunner.class)
+//@RunWith(SystemTestRunner.class)
+@Ignore
 public class AutoScaleTest extends AbstractScaleTests {
 
     private static final String SCALE_UP_STREAM_NAME = "testScaleUp";
@@ -119,6 +119,7 @@ public class AutoScaleTest extends AbstractScaleTests {
         ExecutorServiceHelpers.shutdown(executorService, scaleExecutorService);
     }
 
+    @Ignore
     @Test
     public void scaleTests() {
         testState = new TestState(false);
