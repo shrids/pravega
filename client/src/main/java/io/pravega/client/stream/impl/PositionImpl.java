@@ -29,7 +29,9 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @EqualsAndHashCode(callSuper = false)
 public class PositionImpl extends PositionInternal {
 
@@ -50,11 +52,17 @@ public class PositionImpl extends PositionInternal {
             this.ownedSegments.put(s.getSegment(), entry.getValue());
             this.segmentRanges.put(s.getSegment(), s.getRange());
         }
+        if (segments.containsValue(-1L)) {
+            log.info("===>ownedSegments {}, segmentRanges {}", ownedSegments, segmentRanges );
+        }
     }
     
     @Builder(builderClassName = "PositionBuilder")
     private PositionImpl(Map<Segment, Long> ownedSegments, Map<Segment, Range> segmentRanges) {
         this.ownedSegments = ownedSegments;
+        if (ownedSegments.containsValue(-1L)) {
+            log.info("===>ownedSegments {}, segmentRanges {}", ownedSegments, segmentRanges );
+        }
         if (segmentRanges == null) {
             this.segmentRanges = Collections.emptyMap();
         } else {
