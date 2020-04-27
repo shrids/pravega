@@ -175,6 +175,9 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
         Map<SegmentWithRange, Long> positions = readers.stream()
                 .collect(Collectors.toMap(e -> new SegmentWithRange(e.getSegmentId(), ranges.get(e.getSegmentId())), e -> e.getOffset()));
         sealedSegments.forEach((key, value) -> positions.put(key, -1L));
+        if (positions.containsValue(-1L)) {
+            log.info("==> -ve value found positions {}, sealedSegments {}", positions, sealedSegments);
+        }
         return new PositionImpl(positions);
     }
 

@@ -29,8 +29,10 @@ import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 
 @EqualsAndHashCode(callSuper = false)
+@Slf4j
 public class PositionImpl extends PositionInternal {
 
     private static final PositionSerializer SERIALIZER = new PositionSerializer();
@@ -50,16 +52,23 @@ public class PositionImpl extends PositionInternal {
             this.ownedSegments.put(s.getSegment(), entry.getValue());
             this.segmentRanges.put(s.getSegment(), s.getRange());
         }
+        if (segments.containsValue(-1L)) {
+            log.info("===>ownedSegments {}, segmentRanges {}", ownedSegments, segmentRanges );
+        }
     }
     
     @Builder(builderClassName = "PositionBuilder")
     private PositionImpl(Map<Segment, Long> ownedSegments, Map<Segment, Range> segmentRanges) {
         this.ownedSegments = ownedSegments;
+        if (ownedSegments.containsValue(-1L)) {
+            log.info("===>ownedSegments {}, segmentRanges {}", ownedSegments, segmentRanges );
+        }
         if (segmentRanges == null) {
             this.segmentRanges = Collections.emptyMap();
         } else {
             this.segmentRanges = segmentRanges;
         }
+
     }
 
     @Override
@@ -171,13 +180,21 @@ public class PositionImpl extends PositionInternal {
     @Override
     @SneakyThrows(IOException.class)
     public ByteBuffer toBytes() {
+        if (this.getOwnedSegmentRangesWithOffsets().containsValue(-1L)) {
+            log.info("==> PostionImpl ser has negative offset {}", this.getOwnedSegmentsWithOffsets());
+        }
         ByteArraySegment serialized = SERIALIZER.serialize(this);
         return ByteBuffer.wrap(serialized.array(), serialized.arrayOffset(), serialized.getLength());
     }
     
     @SneakyThrows(IOException.class)
     public static Position fromBytes(ByteBuffer buff) {
-        return SERIALIZER.deserialize(new ByteArraySegment(buff));
+        PositionImpl deserialize = SERIALIZER.deserialize(new ByteArraySegment(buff));
+
+        if (deserialize.getOwnedSegmentRangesWithOffsets().containsValue(-1L)) {
+            log.info("==> PostionImpl deser has negative offset {}", deserialize.getOwnedSegmentsWithOffsets());
+        }
+        return deserialize;
     }
 
 }
