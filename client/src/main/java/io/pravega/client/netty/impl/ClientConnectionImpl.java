@@ -61,8 +61,8 @@ public class ClientConnectionImpl implements ClientConnection {
         try {
             checkClientConnectionClosed();
             nettyHandler.setRecentMessage();
-
             channel = nettyHandler.getChannel();
+            log.debug("Sending message {} on channel {}", cmd, channel);
             channel.writeAndFlush(cmd)
                    .addListener((Future<? super Void> f) -> {
                        if (f.isSuccess()) {
@@ -76,6 +76,7 @@ public class ClientConnectionImpl implements ClientConnection {
             callback.complete(cfe);
         } catch (Exception e) {
             log.warn("Exception while attempting to write WireCommand {} on netty channel {}", cmd, channel);
+            log.warn("Exception during sending command", e);
             callback.complete(new ConnectionFailedException(e));
         }
     }

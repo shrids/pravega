@@ -41,7 +41,7 @@ public class ServerConnectionInboundHandler extends ChannelInboundHandlerAdapter
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         Request cmd = (Request) msg;
         if (cmd.mustLog()) {
-            log.debug("Received request: {}", cmd);
+            log.info("Received request: {}", cmd);
         } else {
             log.trace("Received request: {}", cmd);
         }

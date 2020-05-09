@@ -12,6 +12,7 @@ package io.pravega.client.segment.impl;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Runnables;
 import io.pravega.common.Exceptions;
+import io.pravega.common.Timer;
 import io.pravega.common.concurrent.Futures;
 import io.pravega.common.util.CircularBuffer;
 import io.pravega.shared.protocol.netty.WireCommands;
@@ -196,8 +197,11 @@ class SegmentInputStreamImpl implements SegmentInputStream {
     public void close() {
         log.trace("Closing {}", this);
         if (outstandingRequest != null) {
-            log.trace("Cancel outstanding read request for segment {}", asyncInput.getSegmentId());
+            log.debug("Cancel outstanding read request for segment {}", asyncInput.getSegmentId());
+            final Timer timer = new Timer();
             outstandingRequest.cancel(true);
+            log.debug("Completed cancelling outstanding read request for segment {}. Time taken in ms: {}", asyncInput.getSegmentId(),
+                      timer.getElapsedMillis());
         }
         asyncInput.close();
     }
