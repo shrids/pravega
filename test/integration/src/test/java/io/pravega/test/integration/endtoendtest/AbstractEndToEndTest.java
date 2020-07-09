@@ -52,8 +52,8 @@ public class AbstractEndToEndTest extends ThreadPooledTestSuite {
     protected static final String SCOPE = "testScope";
     protected static final String STREAM = "testStream1";
 
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(60);
+//    @Rule
+//    public Timeout globalTimeout = Timeout.seconds(60);
     
     protected final int controllerPort = TestUtils.getAvailableListenPort();
     protected final String serviceHost = "localhost";
