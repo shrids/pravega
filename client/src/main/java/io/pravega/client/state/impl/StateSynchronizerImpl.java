@@ -17,6 +17,7 @@ import io.pravega.client.state.RevisionedStreamClient;
 import io.pravega.client.state.StateSynchronizer;
 import io.pravega.client.state.Update;
 import io.pravega.client.stream.TruncatedDataException;
+import io.pravega.client.stream.impl.ReaderGroupState;
 import io.pravega.common.util.Retry;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -130,6 +131,9 @@ public class StateSynchronizerImpl<StateT extends Revisioned>
             synchronized (state) {
                 RevisionImpl newRevision = new RevisionImpl(segment, readRevision.asImpl().getOffsetInSegment(), i++);
                 if (newRevision.compareTo(state.getRevision()) > 0) {
+                    if (update instanceof ReaderGroupState.CheckpointReader || update instanceof ReaderGroupState.ClearCheckpointsBefore) {
+                        log.info("=>Apply update {} at revision {}", update, readRevision);
+                    }
                     updateCurrentState(update.applyTo(state, newRevision));
                 }
             }
@@ -235,7 +239,10 @@ public class StateSynchronizerImpl<StateT extends Revisioned>
                 fetchUpdates();
             } else {
                 if (!toWrite.isInit()) {
+                    log.info("=>The following updates were written to the StateSync Stream {} at revision {}", toWrite.getUpdates(), newRevision);
                     applyUpdates(newRevision, toWrite.getUpdates());
+                }else {
+                    log.info("=>StateSync init {} at revision {}", toWrite.getInit(), newRevision);
                 }
                 log.debug("Conditional write to segment {} completed with revision {}", segment, newRevision);
                 break;
@@ -251,7 +258,8 @@ public class StateSynchronizerImpl<StateT extends Revisioned>
     @Synchronized
     private void updateCurrentState(StateT newValue) {
         if (newValue != null && isNewer(newValue.getRevision())) {
-            log.trace("Updating new state to {} ", newValue.getRevision());
+            // log the state in case of init. This is done during compaction.
+            log.info("=>Updating new state to revision {} with {} ", newValue.getRevision(), newValue);
             currentState = newValue;
         }
     }

@@ -61,6 +61,62 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
         return 1;
     }
 
+    @Test//(timeout = 30000)
+    public void testReaderOfflineRace() throws Exception {
+        StreamConfiguration config = getStreamConfig();
+        LocalController controller = (LocalController) controllerWrapper.getController();
+        controllerWrapper.getControllerService().createScope("test").get();
+        controller.createStream("test", "test", config).get();
+        @Cleanup
+        ConnectionFactory connectionFactory = new ConnectionFactoryImpl(ClientConfig.builder()
+                                                                                    .controllerURI(URI.create("tcp://" + serviceHost))
+                                                                                    .build());
+        @Cleanup
+        ClientFactoryImpl clientFactory = new ClientFactoryImpl("test", controller, connectionFactory);
+
+        @Cleanup
+        ReaderGroupManager groupManager = new ReaderGroupManagerImpl("test", controller, clientFactory,
+                connectionFactory);
+        groupManager.createReaderGroup("group", ReaderGroupConfig.builder().disableAutomaticCheckpoints()
+                                                                 .stream("test/test").build());
+
+        final ReaderGroup readerGroup = groupManager.getReaderGroup("group");
+
+        // write events into the stream.
+        @Cleanup
+        EventStreamWriter<String> writer = clientFactory.createEventWriter("test", new JavaSerializer<>(),
+                EventWriterConfig.builder().build());
+        writer.writeEvent("0", "data1").get();
+        writer.writeEvent("0", "data2").get();
+        writer.writeEvent("0", "data2").get();
+        writer.writeEvent("0", "data2").get();
+
+        // create a reader
+        @Cleanup
+        EventStreamReader<String> reader1 = clientFactory.createReader("reader1", "group", new JavaSerializer<>(),
+                ReaderConfig.builder().build());
+
+        EventRead<String> eventRead = reader1.readNextEvent(100);
+        assertNull("Event read should be null since no events are written", eventRead.getEvent());
+        CompletableFuture<Checkpoint> chk1 = readerGroup.initiateCheckpoint("chk-1", this.executorService());
+        eventRead = reader1.readNextEvent(100);
+        while (!eventRead.isCheckpoint()) {
+            eventRead = reader1.readNextEvent(100);
+            if (eventRead.isCheckpoint()) {
+                log.info("=> reader1 at checkpoint {}", eventRead.getCheckpointName());
+            }
+        }
+        @Cleanup
+        EventStreamReader<String> reader2 = clientFactory.createReader("reader2", "group", new JavaSerializer<>(),
+                ReaderConfig.builder().build());
+
+        //make reader1 offline
+        readerGroup.readerOffline("reader1", null);
+
+
+        eventRead = reader2.readNextEvent(10000);
+        assertEquals("data1", eventRead.getEvent());
+    }
 
     @Test(timeout = 30000)
     public void testReaderOffline() throws Exception {

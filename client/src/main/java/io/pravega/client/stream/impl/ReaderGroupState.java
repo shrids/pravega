@@ -1030,7 +1030,7 @@ public class ReaderGroupState implements Revisioned {
     @Builder
     @Data
     @EqualsAndHashCode(callSuper = false)
-    static class CheckpointReader extends ReaderGroupStateUpdate {
+    public static class CheckpointReader extends ReaderGroupStateUpdate {
         private final String checkpointId;
         private final String readerId;
         private final Map<Segment, Long> positions; //Immutable
@@ -1152,7 +1152,7 @@ public class ReaderGroupState implements Revisioned {
     @Builder
     @Data
     @EqualsAndHashCode(callSuper = false)
-    static class ClearCheckpointsBefore extends ReaderGroupStateUpdate {
+    public static class ClearCheckpointsBefore extends ReaderGroupStateUpdate {
         private final String clearUpToCheckpoint;
 
         /**

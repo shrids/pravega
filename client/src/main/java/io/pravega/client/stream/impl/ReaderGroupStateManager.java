@@ -141,7 +141,7 @@ public class ReaderGroupStateManager {
             if (segments == null) {
                 return;
             }
-            log.debug("Removing reader {} from reader group. CurrentState is: {}. Position is: {}.", readerId, state, lastPosition);
+            log.info("=>Removing reader {} from reader group. CurrentState is: {}. Position is: {}.", readerId, state, lastPosition);
             updates.add(new RemoveReader(readerId, lastPosition == null ? Collections.emptyMap()
                     : lastPosition.asImpl().getOwnedSegmentsWithOffsets()));
         });
@@ -330,7 +330,7 @@ public class ReaderGroupStateManager {
     private void compactIfNeeded() {
         //Make sure it has been a while, and compaction are staggered.
         if (sync.bytesWrittenSinceCompaction() > MIN_BYTES_BETWEEN_COMPACTIONS && Math.random() < COMPACTION_PROBABILITY) {
-            log.debug("Compacting reader group state {}", sync.getState());
+            log.info("=>Compacting reader group state {}", sync.getState());
             sync.compact(ReaderGroupState.CompactReaderGroupState::new);
         }
     }
