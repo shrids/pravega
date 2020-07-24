@@ -77,8 +77,9 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
         @Cleanup
         ReaderGroupManager groupManager = new ReaderGroupManagerImpl("test", controller, clientFactory,
                 connectionFactory);
-        groupManager.createReaderGroup("group", ReaderGroupConfig.builder().disableAutomaticCheckpoints()
-                                                                 .stream("test/test").build());
+        ReaderGroupConfig rgConfig = ReaderGroupConfig.builder().disableAutomaticCheckpoints()
+                                                   .stream("test/test").build();
+        groupManager.createReaderGroup("group", rgConfig);
 
         final ReaderGroup readerGroup = groupManager.getReaderGroup("group");
 
@@ -97,7 +98,6 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
                 ReaderConfig.builder().build());
 
         EventRead<String> eventRead = reader1.readNextEvent(100);
-        assertNull("Event read should be null since no events are written", eventRead.getEvent());
         CompletableFuture<Checkpoint> chk1 = readerGroup.initiateCheckpoint("chk-1", this.executorService());
         eventRead = reader1.readNextEvent(100);
         while (!eventRead.isCheckpoint()) {
@@ -109,12 +109,29 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
         @Cleanup
         EventStreamReader<String> reader2 = clientFactory.createReader("reader2", "group", new JavaSerializer<>(),
                 ReaderConfig.builder().build());
+        CompletableFuture<Checkpoint> chk2 = readerGroup.initiateCheckpoint("chk-2", this.executorService());
+        eventRead = reader2.readNextEvent(100);
+        while (!eventRead.isCheckpoint()) {
+            eventRead = reader2.readNextEvent(100);
+            if (eventRead.isCheckpoint()) {
+                log.info("=> reader1 at checkpoint {}", eventRead.getCheckpointName());
+            }
+        }
 
-        //make reader1 offline
+
         readerGroup.readerOffline("reader1", null);
+        @Cleanup
+        EventStreamReader<String> reader = clientFactory.createReader("reader3", "group", new JavaSerializer<>(),
+                ReaderConfig.builder().build());
 
-
-        eventRead = reader2.readNextEvent(10000);
+        while (!chk2.isDone()) {
+            eventRead = reader2.readNextEvent(10000);
+            if (eventRead.isCheckpoint()) {
+                log.info("=> reader1 at checkpoint {}", eventRead.getCheckpointName());
+            }
+        }
+        readerGroup.resetReaderGroup(rgConfig);
+        reader2.readNextEvent(100);
         assertEquals("data1", eventRead.getEvent());
     }
 

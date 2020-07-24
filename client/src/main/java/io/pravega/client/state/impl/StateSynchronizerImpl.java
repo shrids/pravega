@@ -241,7 +241,7 @@ public class StateSynchronizerImpl<StateT extends Revisioned>
                 if (!toWrite.isInit()) {
                     log.info("=>The following updates were written to the StateSync Stream {} at revision {}", toWrite.getUpdates(), newRevision);
                     applyUpdates(newRevision, toWrite.getUpdates());
-                }else {
+                } else {
                     log.info("=>StateSync init {} at revision {}", toWrite.getInit(), newRevision);
                 }
                 log.debug("Conditional write to segment {} completed with revision {}", segment, newRevision);
