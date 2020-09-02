@@ -372,7 +372,7 @@ public class EventStreamReaderImpl<Type> implements EventStreamReader<Type> {
     
     private void handleSegmentTruncated(EventSegmentReader segmentReader) throws TruncatedDataException {
         Segment segmentId = segmentReader.getSegmentId();
-        log.info("{} encountered truncation for segment {} ", this, segmentId);
+        log.info("{} encountered truncation for segment {} at offset {}", this, segmentId, segmentReader.getOffset());
 
         @Cleanup
         SegmentMetadataClient metadataClient = metadataClientFactory.createSegmentMetadataClient(segmentId,

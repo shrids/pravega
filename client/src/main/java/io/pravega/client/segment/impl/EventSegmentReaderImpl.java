@@ -101,10 +101,14 @@ class EventSegmentReaderImpl implements EventSegmentReader {
         headerReadingBuffer.flip();
         int type = headerReadingBuffer.getInt();
         int length = headerReadingBuffer.getInt();
+        log.info("Event length on segment {} is {}", getSegmentId(), length);
+
         if (type != WireCommandType.EVENT.getCode()) {
+            log.error("Current read offset for segment {} is {}",  in.getSegmentId(), in.getOffset());
             throw new InvalidMessageException("Event was of wrong type: " + type);
         }
         if (length < 0 || length > WireCommands.MAX_WIRECOMMAND_SIZE) {
+            log.error("Current read offset for segment {} is {}",  in.getSegmentId(), in.getOffset());
             throw new InvalidMessageException("Event of invalid length: " + length);
         }
         ByteBuffer result = ByteBuffer.allocate(length);

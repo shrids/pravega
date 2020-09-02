@@ -135,7 +135,7 @@ public class RevisionedStreamClientImpl<T> implements RevisionedStreamClient<T> 
             if (startOffset < segmentInfo.getStartingOffset()) {
                 throw new TruncatedDataException("Data at the supplied revision has been truncated.");
             }
-            log.debug("Creating iterator from {} until {} for segment {} ", startOffset, endOffset, segment);
+            log.info("Creating iterator from {} until {} for segment {} ", startOffset, endOffset, segment);
             return new StreamIterator(startOffset, endOffset);
         }
     }
@@ -170,7 +170,7 @@ public class RevisionedStreamClientImpl<T> implements RevisionedStreamClient<T> 
                 if (!hasNext()) {
                     throw new NoSuchElementException();
                 }
-                log.trace("Iterator reading entry at {}", offset.get());
+                log.info("Iterator reading entry at {}", offset.get());
                 in.setOffset(offset.get());
                 try {
                     do {
@@ -180,7 +180,8 @@ public class RevisionedStreamClientImpl<T> implements RevisionedStreamClient<T> 
                             in.setOffset(offset.get(), true);
                         }
                     } while (data == null);
-                } catch (EndOfSegmentException e) {
+                } catch (EndOfSegmentException e) {;
+                    log.error("SegmentInputStream: " + in + " shrunk from its original length: " + endOffset);
                     throw new IllegalStateException("SegmentInputStream: " + in + " shrunk from its original length: " + endOffset);
                 } catch (SegmentTruncatedException e) {
                     throw new TruncatedDataException(e);

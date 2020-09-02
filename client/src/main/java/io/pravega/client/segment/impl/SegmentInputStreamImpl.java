@@ -75,7 +75,7 @@ class SegmentInputStreamImpl implements SegmentInputStream {
     @Override
     @Synchronized
     public void setOffset(long offset, boolean resendRequest) {
-        log.trace("SetOffset {}", offset);
+        log.info("SetOffset for segment {} to {}. The current offset is {} ",  getSegmentId(), offset, this.offset);
         Preconditions.checkArgument(offset >= 0);
         Exceptions.checkNotClosed(asyncInput.isClosed(), this);
         if (offset > this.offset) {
