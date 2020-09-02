@@ -180,7 +180,7 @@ public class RevisionedStreamClientImpl<T> implements RevisionedStreamClient<T> 
                             in.setOffset(offset.get(), true);
                         }
                     } while (data == null);
-                } catch (EndOfSegmentException e) {;
+                } catch (EndOfSegmentException e) {
                     log.error("SegmentInputStream: " + in + " shrunk from its original length: " + endOffset);
                     throw new IllegalStateException("SegmentInputStream: " + in + " shrunk from its original length: " + endOffset);
                 } catch (SegmentTruncatedException e) {
