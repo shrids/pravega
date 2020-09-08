@@ -111,7 +111,6 @@ allprojects {
             //failOnVersionConflict()
             force "com.google.guava:guava:" + guavaVersion
             force "com.google.protobuf:protobuf-java:" + protobufProtocVersion
-            force "io.grpc:grpc-context:" + grpcVersion
             force "commons-beanutils:commons-beanutils:" + commonsBeanutilsVersion
             force "org.apache.commons:commons-compress:" + apacheCommonsCompressVersion
             force "org.apache.commons:commons-lang3:" + commonsLang3Version
@@ -579,12 +578,11 @@ project('shared:controller-api') {
         compile project(':common')
         compile group: 'org.apache.commons', name: 'commons-lang3', version: commonsLang3Version
         compile group: 'commons-io', name: 'commons-io', version: commonsioVersion
-        compile "io.grpc:grpc-netty:" + grpcVersion
+        // use the shaded version of grpc jar as it prevents conflicts with the applications using a different version of netty.
+        compile group: 'io.grpc', name: 'grpc-netty-shaded', version:  grpcVersion
         compile "io.grpc:grpc-auth:" + grpcVersion
-        compile "io.grpc:grpc-protobuf:" + grpcVersion
         compile "io.grpc:grpc-stub:" + grpcVersion
-        compile group: 'io.netty', name: 'netty-tcnative-boringssl-static', version: nettyBoringSSLVersion
-         // Since Java 10 javax.annotation is no more bundled with the JRE
+        // Since Java 10 javax.annotation is no more bundled with the JRE
         compileOnly group: 'javax.annotation', name: 'javax.annotation-api', version: javaxAnnotationVersion
     }
 
