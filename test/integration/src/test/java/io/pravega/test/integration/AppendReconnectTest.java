@@ -1,11 +1,11 @@
 /**
  * Copyright (c) Dell Inc., or its subsidiaries. All Rights Reserved.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
  */
 package io.pravega.test.integration;
 
@@ -13,11 +13,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import io.pravega.client.admin.StreamManager;
+import io.pravega.client.control.impl.ControllerImpl;
+import io.pravega.client.control.impl.ControllerImplConfig;
+import io.pravega.client.segment.impl.SegmentSealedException;
+import io.pravega.client.stream.ScalingPolicy;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -49,9 +55,12 @@ import io.pravega.test.common.LeakDetectorTestSuite;
 import io.pravega.test.common.TestUtils;
 import lombok.Cleanup;
 
+import javax.websocket.ClientEndpoint;
+
 public class AppendReconnectTest extends LeakDetectorTestSuite {
     private ServiceBuilder serviceBuilder;
-    private final Consumer<Segment> segmentSealedCallback = segment -> { };
+    private final Consumer<Segment> segmentSealedCallback = segment -> {
+    };
 
     @Before
     public void setup() throws Exception {
@@ -106,7 +115,7 @@ public class AppendReconnectTest extends LeakDetectorTestSuite {
                 DelegationTokenProviderFactory.createWithEmptyToken());
         assertEquals(payload.length * 2, metadataClient.fetchCurrentSegmentLength());
     }
-    
+
     @Test(timeout = 30000)
     public void reconnectThroughConditionalClient() throws Exception {
         String endpoint = "localhost";
@@ -142,6 +151,68 @@ public class AppendReconnectTest extends LeakDetectorTestSuite {
         SegmentMetadataClient metadataClient = new SegmentMetadataClientFactoryImpl(controller, connectionPool).createSegmentMetadataClient(segment,
                 DelegationTokenProviderFactory.createWithEmptyToken());
         assertEquals((payload.length + WireCommands.TYPE_PLUS_LENGTH_SIZE) * 2,
-                     metadataClient.fetchCurrentSegmentLength());
+                metadataClient.fetchCurrentSegmentLength());
     }
+
+//    @Test//(timeout = 30000)
+//    public void reconnectThroughConditionalClient_a() throws Exception {
+//        String endpoint = "localhost";
+//        int port = TestUtils.getAvailableListenPort();
+//        byte[] payload = "Hello world\n".getBytes();
+//        String scope = "scope";
+//        String stream = "stream";
+//        URI uri = URI.create("tcp://localhost:9090");
+//        @Cleanup
+//        StreamManager streamManager = StreamManager.create(ClientConfig.builder().controllerURI(uri).build());
+//        streamManager.createScope(scope);
+//        streamManager.createStream(scope, stream, StreamConfiguration.builder().scalingPolicy(ScalingPolicy.fixed(1)).build());
+////        StreamSegmentStore store = this.serviceBuilder.createStreamSegmentService();
+//
+////        @Cleanup
+////        PravegaConnectionListener server = new PravegaConnectionListener(false, port, store, mock(TableStore.class),
+////                serviceBuilder.getLowPriorityExecutor());
+////        server.startListening();
+//
+//        ClientConfig cfg = ClientConfig.builder().controllerURI(uri).build();
+//        @Cleanup
+//        SocketConnectionFactoryImpl clientCF = new SocketConnectionFactoryImpl(cfg);
+//        @Cleanup
+//        ConnectionPoolImpl connectionPool = new ConnectionPoolImpl(cfg, clientCF);
+////        Controller controller = new MockController(endpoint, port, connectionPool, true);
+////        controller.createScope(scope);
+////        controller.createStream(scope, stream, StreamConfiguration.builder().build());
+//        @Cleanup
+//        Controller ctrl = new ControllerImpl(ControllerImplConfig.builder().clientConfig(cfg).build(),
+//                clientCF.getInternalExecutor());
+//        ConditionalOutputStreamFactoryImpl segmentClient = new ConditionalOutputStreamFactoryImpl(ctrl, connectionPool);
+//
+////        @Cleanup
+////        ConditionalOutputStream out_normal = segmentClient.createConditionalOutputStream(segment, DelegationTokenProviderFactory.createWithEmptyToken(), EventWriterConfig.builder().build());
+//        @Cleanup
+//        ConditionalOutputStreamImpl out_delay = (ConditionalOutputStreamImpl) segmentClient.createConditionalOutputStream(new Segment(scope, stream, 0),
+//                DelegationTokenProviderFactory.createWithEmptyToken(), EventWriterConfig.builder().build());
+////        CompletableFuture<Boolean> cf = CompletableFuture.supplyAsync(() -> {
+////            try {
+////                return out_delay.writeWithDelay(ByteBuffer.wrap(payload), 0);
+////            } catch (SegmentSealedException e) {
+////                e.printStackTrace();
+////                throw new RuntimeException(e);
+////            }
+////        });
+//        out_delay.write(ByteBuffer.wrap(payload), 0);
+////        cf.join();
+//
+//        System.out.println("end_of_test");
+////
+//
+////        assertTrue(out.write(ByteBuffer.wrap(payload), 0));
+////        for (AutoCloseable c : connectionPool.getActiveChannels()) {
+////            c.close();
+////        }
+////        assertTrue(out.write(ByteBuffer.wrap(payload), payload.length + WireCommands.TYPE_PLUS_LENGTH_SIZE));
+////        SegmentMetadataClient metadataClient = new SegmentMetadataClientFactoryImpl(controller, connectionPool).createSegmentMetadataClient(segment,
+////                DelegationTokenProviderFactory.createWithEmptyToken());
+////        assertEquals((payload.length + WireCommands.TYPE_PLUS_LENGTH_SIZE) * 2,
+////                metadataClient.fetchCurrentSegmentLength());
+//    }
 }

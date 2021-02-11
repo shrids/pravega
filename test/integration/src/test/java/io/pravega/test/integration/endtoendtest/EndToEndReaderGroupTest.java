@@ -17,7 +17,12 @@ import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.impl.ReaderGroupManagerImpl;
 import io.pravega.client.connection.impl.ConnectionFactory;
 import io.pravega.client.connection.impl.SocketConnectionFactoryImpl;
+import io.pravega.client.security.auth.DelegationTokenProviderFactory;
 import io.pravega.client.segment.impl.Segment;
+import io.pravega.client.segment.impl.SegmentInfo;
+import io.pravega.client.segment.impl.SegmentMetadataClient;
+import io.pravega.client.segment.impl.SegmentMetadataClientFactory;
+import io.pravega.client.segment.impl.SegmentMetadataClientFactoryImpl;
 import io.pravega.client.stream.Checkpoint;
 import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
@@ -65,12 +70,13 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
     }
 
 
-    @Test(timeout = 30000)
-    public void testReaderOffline() throws Exception {
+    @Test//(timeout = 30000)
+    public void testReaderCompaction() throws Exception {
         StreamConfiguration config = getStreamConfig();
         LocalController controller = (LocalController) controllerWrapper.getController();
         controllerWrapper.getControllerService().createScope("test").get();
         controller.createStream("test", "test", config).get();
+
         @Cleanup
         ConnectionFactory connectionFactory = new SocketConnectionFactoryImpl(ClientConfig.builder()
                                                                                     .controllerURI(URI.create("tcp://" + serviceHost))
@@ -78,37 +84,43 @@ public class EndToEndReaderGroupTest extends AbstractEndToEndTest {
         @Cleanup
         ClientFactoryImpl clientFactory = new ClientFactoryImpl("test", controller, connectionFactory);
 
+        SegmentMetadataClientFactory metaFact = new SegmentMetadataClientFactoryImpl(controller, clientFactory.getConnectionPool());
+
+
         @Cleanup
         ReaderGroupManager groupManager = new ReaderGroupManagerImpl("test", controller, clientFactory);
-        groupManager.createReaderGroup("group", ReaderGroupConfig.builder().disableAutomaticCheckpoints()
+        groupManager.createReaderGroup("group", ReaderGroupConfig.builder().groupRefreshTimeMillis(100).automaticCheckpointIntervalMillis(1000)
                                                                  .stream("test/test").build());
 
         final ReaderGroup readerGroup = groupManager.getReaderGroup("group");
+
+        //test/_RGgroup/0.#epoch.0
+        @Cleanup
+        SegmentMetadataClient metaClient = metaFact.createSegmentMetadataClient(new Segment("test", "_RGgroup", 0), DelegationTokenProviderFactory.createWithEmptyToken());
 
         // create a reader
         @Cleanup
         EventStreamReader<String> reader1 = clientFactory.createReader("reader1", "group", new JavaSerializer<>(),
                                                                        ReaderConfig.builder().build());
 
-        EventRead<String> eventRead = reader1.readNextEvent(100);
-        assertNull("Event read should be null since no events are written", eventRead.getEvent());
+        SegmentInfo segInfo = metaClient.getSegmentInfo();
+        while(segInfo.getStartingOffset() == 0) {
+            reader1.readNextEvent(100);
+            segInfo = metaClient.getSegmentInfo();
+        }
+        try {
+            groupManager.createReaderGroup("group", ReaderGroupConfig.builder().groupRefreshTimeMillis(100).automaticCheckpointIntervalMillis(1000)
+                    .stream("test/test").build());
 
-        @Cleanup
-        EventStreamReader<String> reader2 = clientFactory.createReader("reader2", "group", new JavaSerializer<>(),
-                                                                       ReaderConfig.builder().build());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        System.out.println();
+//        while()
+//        EventRead<String> eventRead = reader1.readNextEvent(100);
+//        assertNull("Event read should be null since no events are written", eventRead.getEvent());
 
-        //make reader1 offline
-        readerGroup.readerOffline("reader1", null);
 
-        // write events into the stream.
-        @Cleanup
-        EventStreamWriter<String> writer = clientFactory.createEventWriter("test", new JavaSerializer<>(),
-                                                                           EventWriterConfig.builder().build());
-        writer.writeEvent("0", "data1").get();
-        writer.writeEvent("0", "data2").get();
-
-        eventRead = reader2.readNextEvent(10000);
-        assertEquals("data1", eventRead.getEvent());
     }
 
     @Test(timeout = 30000)

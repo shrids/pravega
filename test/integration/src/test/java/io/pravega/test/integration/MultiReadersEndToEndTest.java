@@ -13,15 +13,20 @@ import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.StreamManager;
+import io.pravega.client.segment.impl.ConditionalOutputStreamFactory;
+import io.pravega.client.segment.impl.ConditionalOutputStreamFactoryImpl;
+import io.pravega.client.stream.EventRead;
 import io.pravega.client.stream.EventStreamReader;
 import io.pravega.client.stream.EventStreamWriter;
 import io.pravega.client.stream.EventWriterConfig;
 import io.pravega.client.stream.ReaderConfig;
+import io.pravega.client.stream.ReaderGroup;
 import io.pravega.client.stream.ReaderGroupConfig;
 import io.pravega.client.stream.ReinitializationRequiredException;
 import io.pravega.client.stream.ScalingPolicy;
 import io.pravega.client.stream.Stream;
 import io.pravega.client.stream.StreamConfiguration;
+import io.pravega.client.stream.impl.UTF8StringSerializer;
 import io.pravega.client.stream.mock.MockClientFactory;
 import io.pravega.client.stream.mock.MockStreamManager;
 import io.pravega.common.concurrent.ExecutorServiceHelpers;
@@ -34,6 +39,8 @@ import io.pravega.segmentstore.server.store.ServiceBuilderConfig;
 import io.pravega.test.common.TestUtils;
 import io.pravega.test.integration.utils.IntegerSerializer;
 import io.pravega.test.integration.utils.SetupUtils;
+
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -64,12 +71,12 @@ public class MultiReadersEndToEndTest {
 
     @BeforeClass
     public static void setup() throws Exception {
-        SETUP_UTILS.startAllServices();
+        //SETUP_UTILS.startAllServices();
     }
 
     @AfterClass
     public static void tearDown() throws Exception {
-        SETUP_UTILS.stopAllServices();
+        //SETUP_UTILS.stopAllServices();
     }
 
     @Test(timeout = 30000)
@@ -97,6 +104,113 @@ public class MultiReadersEndToEndTest {
         testStreams.add("teststream5");
         runTest(testStreams, 2, 2);
         runTestUsingMock(testStreams, 2, 2);
+    }
+
+//    @Test
+//    public void conditionalOutputStreamImpl() {
+//        URI uri = URI.create("tcp://localhost:9090");
+//        String scope = "scope";
+//        String stream = "s1";
+//        String rgName= "rg-group";
+//
+//        @Cleanup
+//        StreamManager streamManager = StreamManager.create(ClientConfig.builder().controllerURI(uri).build());
+//        streamManager.createScope(scope);
+//        streamManager.createStream(scope, stream, StreamConfiguration.builder().scalingPolicy(ScalingPolicy.fixed(5)).build());
+//        log.info("Created stream: {}", stream);
+//        new ConditionalOutputStreamFactoryImpl()
+//    }
+
+    @Test
+    public void testRetry() {
+        URI uri = URI.create("tcp://localhost:9090");
+        String scope = "scope";
+        String stream = "s1";
+        String rgName= "rg-group";
+
+        @Cleanup
+        StreamManager streamManager = StreamManager.create(ClientConfig.builder().controllerURI(uri).build());
+        streamManager.createScope(scope);
+        streamManager.createStream(scope, stream, StreamConfiguration.builder().scalingPolicy(ScalingPolicy.fixed(5)).build());
+        log.info("Created stream: {}", stream);
+
+        @Cleanup
+        EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(scope, ClientConfig.builder().maxConnectionsPerSegmentStore(100).controllerURI(uri).build());
+        @Cleanup
+        EventStreamWriter<String> eventWriter = clientFactory.createEventWriter(stream, new UTF8StringSerializer(), EventWriterConfig.builder().build());
+//        eventWriter.writeEvent("hello");
+//        eventWriter.writeEvent("hello1");
+//        eventWriter.flush();
+
+        @Cleanup
+        ReaderGroupManager readerGroupManager = ReaderGroupManager.withScope(scope,
+                ClientConfig.builder().controllerURI(uri).build());
+        ReaderGroupConfig rgConfig = ReaderGroupConfig.builder().stream(Stream.of(scope, stream)).build();
+        readerGroupManager.createReaderGroup(rgName, rgConfig);
+        @Cleanup
+        final EventStreamReader<String> reader = clientFactory.createReader("R1", rgName, new UTF8StringSerializer(), ReaderConfig.builder().build());
+
+        try {
+            while (true) {
+                EventRead<String> event = reader.readNextEvent(100);
+                if (event.isCheckpoint()) {
+                    log.debug("Event read {}", event);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
+        }
+
+    }
+
+    @Test
+    public void testCheckpoint() {
+        URI uri = URI.create("tcp://localhost:9090");
+        String scope = "scope";
+        String stream = "s1";
+        String rgName= "rg-group";
+
+        @Cleanup
+        StreamManager streamManager = StreamManager.create(ClientConfig.builder().controllerURI(uri).build());
+        streamManager.createScope(scope);
+        streamManager.createStream(scope, stream, StreamConfiguration.builder().scalingPolicy(ScalingPolicy.fixed(5)).build());
+        log.info("Created stream: {}", stream);
+
+        @Cleanup
+        EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(scope, ClientConfig.builder().controllerURI(uri).build());
+        @Cleanup
+        EventStreamWriter<String> eventWriter = clientFactory.createEventWriter(stream, new UTF8StringSerializer(), EventWriterConfig.builder().build());
+        eventWriter.writeEvent("hello");
+        eventWriter.writeEvent("hello1");
+        eventWriter.flush();
+
+        @Cleanup
+        ReaderGroupManager readerGroupManager = ReaderGroupManager.withScope(scope,
+                ClientConfig.builder().controllerURI(uri).build());
+        ReaderGroupConfig rgConfig = ReaderGroupConfig.builder().stream(Stream.of(scope, stream)).build();
+        readerGroupManager.createReaderGroup(rgName, rgConfig);
+        final EventStreamReader<String> reader = clientFactory.createReader("R1", rgName, new UTF8StringSerializer(), ReaderConfig.builder().build());
+
+        try {
+            while (true) {
+                EventRead<String> event = reader.readNextEvent(5000);
+                if (event.isCheckpoint()) {
+                    System.out.println("Checkpoint===");
+                    break;
+                }
+                log.debug("Event read {}", event);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
+        }
+        reader.readNextEvent(60000);
+        reader.close();
+        ReaderGroup rg = readerGroupManager.getReaderGroup(rgName);
+        System.out.println(rg);
+
+
     }
 
     private void runTest(final Set<String> streamNames, final int numParallelReaders, final int numSegments)
@@ -145,6 +259,8 @@ public class MultiReadersEndToEndTest {
         Assert.assertEquals(NUM_TEST_EVENTS, new TreeSet<>(read).size());
         readerGroupManager.deleteReaderGroup(readerGroupName);
     }
+
+
 
     private Collection<Integer> readAllEvents(final int numParallelReaders, EventStreamClientFactory clientFactory,
                                               final String readerGroupName, final int numSegments) {

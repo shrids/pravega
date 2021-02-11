@@ -16,12 +16,15 @@ import io.pravega.client.stream.impl.Orderer;
 import io.pravega.client.stream.mock.MockConnectionFactoryImpl;
 import io.pravega.client.stream.mock.MockController;
 import io.pravega.common.ObjectClosedException;
+import io.pravega.common.util.RetriesExhaustedException;
 import io.pravega.shared.protocol.netty.ConnectionFailedException;
 import io.pravega.shared.protocol.netty.WireCommandType;
 import io.pravega.shared.protocol.netty.WireCommands;
 import io.pravega.shared.protocol.netty.WireCommands.SegmentRead;
 import io.pravega.test.common.AssertExtensions;
 import io.pravega.test.common.LeakDetectorTestSuite;
+
+import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Vector;
@@ -39,6 +42,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -453,6 +458,22 @@ public class SegmentInputStreamTest extends LeakDetectorTestSuite {
         @Cleanup
         EventSegmentReaderImpl stream = SegmentInputStreamFactoryImpl.getEventSegmentReader(mockAsyncInputStream, 0,
                 -2, SegmentInputStreamImpl.DEFAULT_BUFFER_SIZE);
+    }
+
+    @Test
+    public void testRetriesExhaustedException() {
+        AsyncSegmentInputStream mockAsyncInputStream = mock(AsyncSegmentInputStream.class);
+        when(mockAsyncInputStream.read(anyLong(), anyInt())).thenAnswer(invocation -> {
+            CompletableFuture<SegmentRead> cf = new CompletableFuture<>();
+            cf.completeExceptionally(new RetriesExhaustedException(new SocketTimeoutException()));
+            return cf;
+        });
+
+        @Cleanup
+        EventSegmentReaderImpl stream = SegmentInputStreamFactoryImpl.getEventSegmentReader(mockAsyncInputStream, 0,
+                100, SegmentInputStreamImpl.DEFAULT_BUFFER_SIZE);
+        stream.fillBuffer();
+
     }
     
     @Test
