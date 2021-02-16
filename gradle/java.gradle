@@ -80,6 +80,9 @@ plugins.withId('java') {
             project.setProperty("signing.secretKeyRingFile", secretKeyPath)
         }
     }
+    tasks.withType(Test).configureEach {
+        outputs.upToDateWhen { false }
+    }
 
     tasks.withType(Test) {
         systemProperties 'logback.configurationFile' : new File(buildDir,'resources/test/logback.xml').absolutePath

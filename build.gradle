@@ -144,6 +144,10 @@ project('common') {
         options.compilerArgs.add(clientJavaVersion)
     }
 
+    test {
+        exclude 'io/pravega/**'
+    }
+
     javadoc {
         title = "Pravega Common Libraries"
         dependsOn delombok
@@ -171,6 +175,9 @@ project('common_server') {
         source = delombok.outputDir
         failOnError = true
     }
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 def withoutLogger = { exclude group: 'org.slf4j', module: 'slf4j-log4j12'
@@ -187,6 +194,10 @@ project('shared:authplugin') {
     tasks.withType(JavaCompile) {
         options.compilerArgs.remove(getDefaultJavaVersion())
         options.compilerArgs.add(clientJavaVersion)
+    }
+
+    test {
+        exclude 'io/pravega/**'
     }
 
     javadoc {
@@ -211,6 +222,9 @@ project('shared:basic-authplugin') {
         source = delombok.outputDir
         failOnError = true
     }
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('shared:security') {
@@ -226,6 +240,7 @@ project('shared:security') {
         compile group: 'org.glassfish.jaxb', name: 'jaxb-runtime', version: jaxbVersion
 
         testCompile project(':test:testcommon')
+
     }
 
     tasks.withType(JavaCompile) {
@@ -233,6 +248,9 @@ project('shared:security') {
         options.compilerArgs.add(clientJavaVersion)
     }
 
+    test {
+        exclude 'io/pravega/**'
+    }
     javadoc {
         exclude 'io/pravega/shared/*'
         dependsOn delombok
@@ -255,6 +273,9 @@ project ('shared:cluster') {
         source = delombok.outputDir
         failOnError = true
     }
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project ('shared:metrics') {
@@ -275,6 +296,9 @@ project ('shared:metrics') {
         source = delombok.outputDir
         failOnError = true
     }
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('shared:protocol') {
@@ -292,6 +316,9 @@ project('shared:protocol') {
     tasks.withType(JavaCompile) {
         options.compilerArgs.remove(getDefaultJavaVersion())
         options.compilerArgs.add(clientJavaVersion)
+    }
+    test {
+        exclude 'io/pravega/**'
     }
 }
 
@@ -322,6 +349,9 @@ project('client') {
         failOnError = true
         exclude "**/impl/**";
     }
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('test:testcommon') {
@@ -345,6 +375,10 @@ project('test:testcommon') {
         source = delombok.outputDir
         failOnError = true
     }
+
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('segmentstore:contracts') {
@@ -356,6 +390,9 @@ project('segmentstore:contracts') {
         dependsOn delombok
         source = delombok.outputDir
         failOnError = true
+    }
+    test {
+        exclude 'io/pravega/**'
     }
 }
 
@@ -371,6 +408,10 @@ project('segmentstore:storage') {
         dependsOn delombok
         source = delombok.outputDir
         failOnError = true
+    }
+
+    test {
+        exclude 'io/pravega/**'
     }
 }
 
@@ -389,6 +430,9 @@ project('segmentstore:storage:impl') {
         dependsOn delombok
         source = delombok.outputDir
         failOnError = true
+    }
+    test {
+        exclude 'io/pravega/**'
     }
 }
 
@@ -431,6 +475,10 @@ project ('bindings') {
         source = delombok.outputDir
         failOnError = true
     }
+
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('segmentstore:server') {
@@ -446,6 +494,9 @@ project('segmentstore:server') {
         dependsOn delombok
         source = delombok.outputDir
         failOnError = true
+    }
+    test {
+        exclude 'io/pravega/**'
     }
 }
 
@@ -519,6 +570,9 @@ project('segmentstore:server:host') {
         source = delombok.outputDir
         failOnError = true
     }
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('test:integration') {
@@ -540,6 +594,9 @@ project('test:integration') {
                    "-Dlog.name=selftest"]
     }
 
+    test {
+        exclude 'io/pravega/**'
+    }
     dependencies {
         compile project(':common')
         compile project(':client')
@@ -663,6 +720,10 @@ project('shared:controller-api') {
         source = delombok.outputDir
         failOnError = true
     }
+
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('controller') {
@@ -750,6 +811,10 @@ project('controller') {
     applicationDistribution.into("bin") {
         from(createAppWithGCLogging)
     }
+
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('cli:admin') {
@@ -795,6 +860,9 @@ project('cli:admin') {
         source = delombok.outputDir
         failOnError = true
     }
+    test {
+        exclude 'io/pravega/**'
+    }
 }
 
 project('cli:user') {
@@ -826,6 +894,10 @@ project('cli:user') {
         dependsOn delombok
         source = delombok.outputDir
         failOnError = true
+    }
+
+    test {
+        exclude 'io/pravega/**'
     }
 }
 
