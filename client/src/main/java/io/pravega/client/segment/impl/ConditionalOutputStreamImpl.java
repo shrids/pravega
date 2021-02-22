@@ -18,7 +18,6 @@ import io.pravega.client.connection.impl.RawClient;
 import io.pravega.client.control.impl.Controller;
 import io.pravega.client.security.auth.DelegationTokenProvider;
 import io.pravega.common.Exceptions;
-import io.pravega.common.concurrent.Futures;
 import io.pravega.common.util.Retry.RetryWithBackoff;
 import io.pravega.shared.protocol.netty.ConnectionFailedException;
 import io.pravega.shared.protocol.netty.Reply;
@@ -91,10 +90,7 @@ class ConditionalOutputStreamImpl implements ConditionalOutputStream {
                                         segmentId.getScopedName(), token);
                                 return client.sendRequest(requestId, setup);
                             });
-                            Futures.await(reply);
-                            if (reply.isCompletedExceptionally()) {
-                                log.error("Error");
-                            }
+
                             AppendSetup appendSetup = transformAppendSetup(reply.join());
                             if (appendSetup.getLastEventNumber() >= appendSequence) {
                                 return true;
@@ -104,10 +100,6 @@ class ConditionalOutputStreamImpl implements ConditionalOutputStream {
                         val request = new ConditionalAppend(writerId, appendSequence, expectedOffset,
                                                             new Event(Unpooled.wrappedBuffer(data)), requestId);
                         val reply = client.sendRequest(requestId, request);
-                        Futures.await(reply);
-                        if (reply.isCompletedExceptionally()) {
-                            log.error("Error");
-                        }
                         return transformDataAppended(reply.join());
                     });
         } 
