@@ -13,6 +13,8 @@ import io.pravega.client.ClientConfig;
 import io.pravega.client.EventStreamClientFactory;
 import io.pravega.client.admin.ReaderGroupManager;
 import io.pravega.client.admin.StreamManager;
+import io.pravega.client.control.impl.ControllerImpl;
+import io.pravega.client.control.impl.ControllerImplConfig;
 import io.pravega.client.segment.impl.ConditionalOutputStreamFactory;
 import io.pravega.client.segment.impl.ConditionalOutputStreamFactoryImpl;
 import io.pravega.client.stream.EventRead;
@@ -49,9 +51,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -120,6 +125,68 @@ public class MultiReadersEndToEndTest {
 //        log.info("Created stream: {}", stream);
 //        new ConditionalOutputStreamFactoryImpl()
 //    }
+
+    @Test
+    public void testControllerClient() {
+        URI uri = URI.create("tcp://localhost:9090");
+        String scope = "scope";
+        String stream = "s1";
+        String rgName= "rg-group";
+
+        ClientConfig cfg = ClientConfig.builder().controllerURI(uri).build();
+        @Cleanup
+        StreamManager streamManager = StreamManager.create(cfg);
+
+        ControllerImplConfig ctrlCfg = ControllerImplConfig.builder().clientConfig(cfg).build();
+        ScheduledExecutorService executor = ExecutorServiceHelpers.newScheduledThreadPool(6, "StreamManager-test");
+        @Cleanup
+        ControllerImpl controller = new ControllerImpl(ctrlCfg, executor);
+
+        while (true) {
+            try {
+//                streamManager.createScope(scope);
+//                streamManager.createStream(scope, stream, StreamConfiguration.builder().scalingPolicy(ScalingPolicy.fixed(5)).build());
+                CompletableFuture<Boolean> f1 = controller.createScope(scope);
+                CompletableFuture<Boolean> f2 = controller.createStream(scope, stream, StreamConfiguration.builder().scalingPolicy(ScalingPolicy.fixed(5)).build());
+                CompletableFuture.allOf(f1, f2).join();
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                controller.close();
+                System.out.println("finish");
+            }
+            log.info("Created stream: {}", stream);
+        }
+
+//        @Cleanup
+//        EventStreamClientFactory clientFactory = EventStreamClientFactory.withScope(scope, ClientConfig.builder().maxConnectionsPerSegmentStore(100).controllerURI(uri).build());
+//        @Cleanup
+//        EventStreamWriter<String> eventWriter = clientFactory.createEventWriter(stream, new UTF8StringSerializer(), EventWriterConfig.builder().build());
+////        eventWriter.writeEvent("hello");
+////        eventWriter.writeEvent("hello1");
+////        eventWriter.flush();
+//
+//        @Cleanup
+//        ReaderGroupManager readerGroupManager = ReaderGroupManager.withScope(scope,
+//                ClientConfig.builder().controllerURI(uri).build());
+//        ReaderGroupConfig rgConfig = ReaderGroupConfig.builder().stream(Stream.of(scope, stream)).build();
+//        readerGroupManager.createReaderGroup(rgName, rgConfig);
+//        @Cleanup
+//        final EventStreamReader<String> reader = clientFactory.createReader("R1", rgName, new UTF8StringSerializer(), ReaderConfig.builder().build());
+//
+//        try {
+//            while (true) {
+//                EventRead<String> event = reader.readNextEvent(100);
+//                if (event.isCheckpoint()) {
+//                    log.debug("Event read {}", event);
+//                }
+//            }
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//            throw e;
+//        }
+
+    }
 
     @Test
     public void testRetry() {
