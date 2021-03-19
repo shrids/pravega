@@ -194,6 +194,7 @@ public class InProcPravegaCluster implements AutoCloseable {
             zkPort = zkUri.getPort();
         }
 
+        log.info("=> ZK started on url {}", zkUrl);
         if (isInProcHDFS) {
             startLocalHDFS();
             hdfsUrl = String.format("hdfs://localhost:%d/", localHdfs.getNameNodePort());
@@ -204,11 +205,12 @@ public class InProcPravegaCluster implements AutoCloseable {
         if (isInProcController) {
             startLocalControllers();
         }
-
+        log.info("=> Controllers started ");
         if (isInProcSegmentStore) {
             nodeServiceStarter = new ServiceStarter[segmentStoreCount];
             startLocalSegmentStores();
         }
+        log.info("=> Segmentstore started");
 
     }
 
@@ -427,6 +429,7 @@ public class InProcPravegaCluster implements AutoCloseable {
             controllerService.startAsync().awaitRunning();
             return controllerService;
         } catch (Throwable ex) {
+            log.error("=> failed to start controller", ex);
             Callbacks.invokeSafely(controllerService::close, ex2 -> log.error("Unable to clean up controller startup.", ex2));
             throw ex;
         }
