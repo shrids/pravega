@@ -28,12 +28,14 @@ import static org.junit.Assert.assertTrue;
 public class ExtendedS3SimpleStorageTests extends SimpleStorageTests {
     private ExtendedS3TestContext testContext = null;
 
+    @Override
     @Before
     public void before() throws Exception {
         this.testContext = new ExtendedS3TestContext();
         super.before();
     }
 
+    @Override
     @After
     public void after() throws Exception {
         if (this.testContext != null) {
@@ -77,12 +79,14 @@ public class ExtendedS3SimpleStorageTests extends SimpleStorageTests {
     public static class ExtendedS3ChunkStorageTests extends ChunkStorageTests {
         private ExtendedS3TestContext testContext = null;
 
+        @Override
         @Before
         public void before() throws Exception {
             this.testContext = new ExtendedS3TestContext();
             super.before();
         }
 
+        @Override
         @After
         public void after() throws Exception {
             if (this.testContext != null) {
@@ -99,6 +103,7 @@ public class ExtendedS3SimpleStorageTests extends SimpleStorageTests {
         /**
          * Test default capabilities.
          */
+        @Override
         @Test
         public void testCapabilities() {
             assertTrue(getChunkStorage().supportsAppend());
@@ -113,12 +118,14 @@ public class ExtendedS3SimpleStorageTests extends SimpleStorageTests {
     public static class ExtendedS3ChunkStorageSystemJournalTests extends SystemJournalTests {
         private ExtendedS3TestContext testContext = null;
 
+        @Override
         @Before
         public void before() throws Exception {
             this.testContext = new ExtendedS3TestContext();
             super.before();
         }
 
+        @Override
         @After
         public void after() throws Exception {
             if (this.testContext != null) {

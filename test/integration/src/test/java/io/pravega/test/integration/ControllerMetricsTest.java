@@ -33,6 +33,7 @@ import io.pravega.shared.metrics.MetricsConfig;
 import io.pravega.shared.metrics.MetricsProvider;
 import io.pravega.shared.metrics.StatsProvider;
 import io.pravega.test.common.AssertExtensions;
+import io.pravega.test.common.SerializedClassRunner;
 import io.pravega.test.common.TestUtils;
 import io.pravega.test.common.TestingServerStarter;
 import io.pravega.test.common.ThreadPooledTestSuite;
@@ -46,6 +47,7 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import static io.pravega.shared.MetricsNames.CONTROLLER_ZK_SESSION_EXPIRATION;
 import static io.pravega.shared.MetricsNames.CREATE_STREAM;
@@ -67,6 +69,7 @@ import static io.pravega.test.integration.ReadWriteUtils.writeEvents;
  * Check the end to end correctness of metrics published by the Controller.
  */
 @Slf4j
+@RunWith(SerializedClassRunner.class)
 public class ControllerMetricsTest extends ThreadPooledTestSuite {
 
     private final int controllerPort = TestUtils.getAvailableListenPort();
@@ -133,6 +136,14 @@ public class ControllerMetricsTest extends ThreadPooledTestSuite {
         zkTestServer.close();
     }
 
+    @Test(timeout = 3000)
+    public void testSetup() throws Exception {
+        //This is to verify the setUp / tearDown methods
+        //That needs to be independently validated because previous versions of this test
+        //had errors in the setup which were dependent on the state of the metrics
+        //So streamMetricsTest would pass or fail depending on what ran before it. 
+    }
+    
     /**
      * This test verifies that the appropriate metrics for Stream operations are updated correctly (counters, latency
      * histograms). Note that this test performs "at least" assertions on metrics as in an environment with concurrent

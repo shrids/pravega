@@ -77,8 +77,8 @@ jobs:
         with:
           path: ${{env.BUILD_CACHE_PATH}}
           key: ${{github.run_id}}
-      - name: Compile & Static Analysis
-        run: ./gradlew jar compileTest rat checkstyleMain checkstyleTest spotbugsMain spotbugsTest --parallel ${{env.GRADLE_OPTS}}
+      - name: Compile & Checkstyle
+        run: ./gradlew jar compileTest checkstyleMain checkstyleTest --parallel ${{env.GRADLE_OPTS}}
 
   unit_client:
     name: Client Unit Tests
@@ -102,7 +102,7 @@ jobs:
           path: ${{env.TEST_OUTPUT_CACHE_PATH}}
           key: ${{github.run_id}}-${{github.job}}
       - name: Unit tests
-        run: ./gradlew client:test ${{env.GRADLE_OPTS}}
+        run: ./gradlew client:test common:test test:testcommon:test ${{env.GRADLE_OPTS}}
       - name: Codecov
         uses: codecov/codecov-action@v1.0.15
 
@@ -133,7 +133,7 @@ jobs:
         uses: codecov/codecov-action@v1.0.15
 
   unit_segment_store:
-    name: Segment Store Unit Tests
+    name: Segment Store Service Unit Tests
     needs: build
     runs-on: ubuntu-20.04
     steps:
@@ -157,14 +157,38 @@ jobs:
         run: >
           ./gradlew
           segmentstore:server:test
-          segmentstore:storage:test
-          segmentstore:storage:impl:test
+          segmentstore:server:host:test
           bindings:test
           --parallel ${{env.GRADLE_OPTS}}
-      - name: Segment Store Host Tests      # Run this separately since it conflicts with segmentstore:storage:impl:test.
+      - name: Codecov
+        uses: codecov/codecov-action@v1.0.15
+
+  unit_storage:
+    name: Storage Unit Tests
+    needs: build
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Gradle & Maven Cache
+        uses: actions/cache@v2.1.0
+        with:
+          path: ${{env.GLOBAL_CACHE_PATH}}
+          key: ${{env.GLOBAL_CACHE_KEY}}
+          restore-keys: ${{env.GLOBAL_CACHE_RESTORE_KEYS}}
+      - name: Build Output Cache
+        uses: actions/cache@v2.1.0
+        with:
+          path: ${{env.BUILD_CACHE_PATH}}
+          key: ${{github.run_id}}
+      - name: Test Output Cache
+        uses: actions/cache@v2.1.0
+        with:
+          path: ${{env.TEST_OUTPUT_CACHE_PATH}}
+          key: ${{github.run_id}}-${{github.job}}
+      - name: Segment Store Unit tests
         run: >
           ./gradlew
-          segmentstore:server:host:test
+          segmentstore:storage:test
+          segmentstore:storage:impl:test
           --parallel ${{env.GRADLE_OPTS}}
       - name: Codecov
         uses: codecov/codecov-action@v1.0.15
@@ -190,10 +214,15 @@ jobs:
         with:
           path: ${{env.TEST_OUTPUT_CACHE_PATH}}
           key: ${{github.run_id}}-${{github.job}}
+      - name: Static analysis tests
+        run: >
+          ./gradlew rat spotbugsMain spotbugsTest --parallel ${{env.GRADLE_OPTS}}
       - name: Unit tests
         run: >
           ./gradlew test
           -x client:test
+          -x common:test
+          -x test:testcommon:test
           -x controller:test
           -x test:integration:test
           -x bindings:test
@@ -232,7 +261,7 @@ jobs:
   # DO NOT RENAME THIS JOB. Mergers to master branch are gated on this completing successfully.
   build_and_test_complete:
     name: CI Complete
-    needs: [build, integration, unit_other, unit_segment_store, unit_controller, unit_client]
+    needs: [build, integration, unit_other, unit_segment_store, unit_storage, unit_controller, unit_client]
     runs-on: ubuntu-20.04
     steps:
       - name: Check Build Status

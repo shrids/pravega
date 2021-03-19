@@ -12,9 +12,9 @@ package io.pravega.shared.metrics;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-class GaugeProxy extends MetricProxy<Gauge> implements Gauge {
+class GaugeProxy extends MetricProxy<Gauge, GaugeProxy> implements Gauge {
 
-    GaugeProxy(Gauge gauge, String proxyName, Consumer<String> closeCallback) {
+    GaugeProxy(Gauge gauge, String proxyName, Consumer<GaugeProxy> closeCallback) {
         super(gauge, proxyName, closeCallback);
     }
 
@@ -26,5 +26,15 @@ class GaugeProxy extends MetricProxy<Gauge> implements Gauge {
     @Override
     public Supplier<Number> getSupplier() {
         return getInstance().getSupplier();
+    }
+
+    @Override
+    protected GaugeProxy getSelf() {
+        return this;
+    }
+
+    @Override
+    protected Gauge getNullInstance() {
+        return NullStatsLogger.NULLGAUGE;
     }
 }

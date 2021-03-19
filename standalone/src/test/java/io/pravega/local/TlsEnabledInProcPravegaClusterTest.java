@@ -14,6 +14,7 @@ import io.pravega.client.ClientConfig;
 import io.pravega.client.admin.StreamManager;
 import io.pravega.client.admin.impl.StreamManagerImpl;
 import io.pravega.client.control.impl.ControllerImplConfig;
+import io.pravega.test.common.SerializedClassRunner;
 import io.pravega.test.common.AssertExtensions;
 import java.net.URI;
 import javax.net.ssl.SSLHandshakeException;
@@ -22,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 
 import static io.pravega.local.PravegaSanityTests.testWriteAndReadAnEvent;
 
@@ -29,6 +31,7 @@ import static io.pravega.local.PravegaSanityTests.testWriteAndReadAnEvent;
  * Tests for TLS enabled standalone cluster. It inherits the test methods defined in the parent class.
  */
 @Slf4j
+@RunWith(SerializedClassRunner.class)
 public class TlsEnabledInProcPravegaClusterTest {
 
     @ClassRule
