@@ -16,10 +16,15 @@
 package io.pravega.common.cluster;
 
 import com.google.common.collect.Maps;
+import lombok.Cleanup;
 import org.junit.Test;
 import org.mockito.internal.util.collections.Sets;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -54,5 +59,30 @@ public class SerializationTest {
         byte[] serialized = hostContainerMap.toBytes();
         HostContainerMap deserialized = HostContainerMap.fromBytes(serialized);
         assertTrue(Maps.difference(hostContainerMap.getHostContainerMap(), deserialized.getHostContainerMap()).areEqual());
+    }
+
+    @Test
+    public void serializeTest() throws Exception {
+        Host host = new Host("1.1.1.1", 1234, "ep");
+        byte[] ser = serialize(host);
+        Host hostDeserialized = deSerializeHost(ser);
+        assertEquals(host, hostDeserialized);
+    }
+
+    private byte[] serialize(Host sc) throws IOException {
+        @Cleanup
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        @Cleanup
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeObject(sc);
+        return baos.toByteArray();
+    }
+
+    private Host deSerializeHost(final byte[] buf) throws Exception {
+        @Cleanup
+        ByteArrayInputStream bais = new ByteArrayInputStream(buf);
+        @Cleanup
+        ObjectInputStream ois = new ObjectInputStream(bais);
+        return (Host) ois.readObject();
     }
 }

@@ -19,15 +19,18 @@ import io.pravega.common.ObjectBuilder;
 import io.pravega.common.io.serialization.RevisionDataInput;
 import io.pravega.common.io.serialization.RevisionDataOutput;
 import io.pravega.common.io.serialization.VersionedSerializer;
+import io.pravega.common.util.ByteArraySegment;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NonNull;
 import lombok.SneakyThrows;
 
 import java.io.IOException;
+import java.io.ObjectStreamException;
+import java.io.Serializable;
 
 @Data
-public class Host {
+public class Host implements Serializable {
     static final HostSerializer SERIALIZER = new HostSerializer();
 
     @NonNull
@@ -62,6 +65,21 @@ public class Host {
     @SneakyThrows(IOException.class)
     public byte[] toBytes() {
         return SERIALIZER.serialize(this).getCopy();
+    }
+
+    @SneakyThrows(IOException.class)
+    private Object writeReplace() throws ObjectStreamException {
+        return new SerializedForm(SERIALIZER.serialize(this).getCopy());
+    }
+
+    @Data
+    private static class SerializedForm implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private final byte[] value;
+        @SneakyThrows(IOException.class)
+        Object readResolve() throws ObjectStreamException {
+            return SERIALIZER.deserialize(new ByteArraySegment(value));
+        }
     }
 
     static class HostSerializer
